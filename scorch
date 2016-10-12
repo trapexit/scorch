@@ -136,6 +136,7 @@ def print_filepath(count,total,filepath):
     padded = str(count).zfill(padding)
     s = '{0}/{1} {2}: '.format(padded,total,filepath)
     print(s,end='')
+    sys.stdout.flush()
 
 
 # Can't use inode since filesystems based on FUSE can have those change
