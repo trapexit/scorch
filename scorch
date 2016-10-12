@@ -31,12 +31,14 @@ import tempfile
 import time
 
 
+DEFAULT_DB = '/var/tmp/scorch.db'
+
 def build_arg_parser():
     desc = 'a tool to help discover file corruption'
     parser = argparse.ArgumentParser(description=desc)
     parser.add_argument('-d','--db',
                         type=str,
-                        required=True,
+                        default=DEFAULT_DB,
                         help='database which stores hashes')
     parser.add_argument('inst',
                         choices=['add','append','check',
