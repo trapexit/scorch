@@ -19,6 +19,7 @@
 import argparse
 import errno
 import hashlib
+import math
 import os
 import pickle
 import random
@@ -32,6 +33,7 @@ import time
 
 
 DEFAULT_DB = '/var/tmp/scorch.db'
+
 
 def build_arg_parser():
     desc = 'a tool to help discover file corruption'
@@ -139,6 +141,15 @@ def print_filepath(count,total,filepath):
     s = '{0}/{1} {2}: '.format(padded,total,filepath)
     print(s,end='')
     sys.stdout.flush()
+
+
+def humansize(nbytes):
+    suffixes = ['B','KB','MB','GB','TB','PB','ZB']
+    rank = int(math.log(nbytes,1024))
+    rank = min(rank, len(suffixes) - 1)
+    human = nbytes / (1024.0 ** rank)
+    f = ('%.2f' % human).rstrip('0').rstrip('.')
+    return '%s%s' % (f, suffixes[rank])
 
 
 # Can't use inode since filesystems based on FUSE can have those change
@@ -254,9 +265,13 @@ def check_hashes(db,basepath,restrict,fnfilter,sort,
             if different_files(oldst,st):
                 if not verbose:
                     print_filepath(actions,total,filepath)
+                old_size = humansize(oldst.st_size)
+                new_size = humansize(st.st_size)
+                old_time = time.ctime(oldst.st_mtime)
+                new_time = time.ctime(st.st_mtime)
                 print("FILE CHANGED\n",
-                      "- size:",oldst.st_size,st.st_size,"\n"
-                      " - mtime:",int(oldst.st_mtime),int(st.st_mtime))
+                      "- size:",old_size,"->",new_size,"\n"
+                      " - mtime:",old_time,"->",new_time)
                 if update:
                     hashval = hash_file(filepath)
                     dbadd[filepath] = (hashval,st)
