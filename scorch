@@ -448,9 +448,9 @@ def list_missing(db,basepath,restrict,fnfilter,sort,
                  dbadd,dbremove):
     rv = 1
     filepaths = get_file_list(basepath,fnfilter)
-    sort(filepaths)
 
     actions = 0
+    output  = []
     for (filepath,(hashval,st)) in db.items():
         if not filepath.startswith(basepath):
             continue
@@ -464,6 +464,10 @@ def list_missing(db,basepath,restrict,fnfilter,sort,
         actions += 1
 
         rv = 0
+        output.append(filepath)
+
+    sort(output)
+    for filepath in output:
         print(filepath)
 
     return rv
