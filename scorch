@@ -47,7 +47,7 @@ def build_arg_parser():
                                  'check+update','delete',
                                  'cleanup','list',
                                  'list-unhashed','list-dups',
-                                 'list-missing'],
+                                 'list-missing','find'],
                         help='actions')
     parser.add_argument('dir',
                         type=str,
@@ -473,6 +473,46 @@ def list_missing(db,basepath,restrict,fnfilter,sort,
     return rv
 
 
+def find(db,basepath,restrict,fnfilter,sort,
+         maxactions,verbose,breakonerror,
+         dbadd,dbremove):
+    rv = 1
+    hashdb = {}
+    for (filepath,(hashval,st)) in db.items():
+        if not hashval in hashdb:
+            hashdb[hashval] = [filepath]
+            continue
+        hashdb[hashval].append(filepath)
+
+    actions = 0
+    filepaths = get_file_list(basepath,fnfilter)
+    for filepath in filepaths:
+        try:
+            if actions >= maxactions:
+                return rv;
+
+            st = get_stat(filepath)
+            if not st:
+                continue
+            if not restrict(st):
+                continue
+
+            hashval = hash_file(filepath)
+            if hashval not in hashdb:
+                continue
+
+            rv = 0
+            actions += 1
+
+            files = [shlex.quote(f) for f in hashdb[hashval]]
+            files.sort()
+            print(hashval,filepath,'=',' '.join(files))
+        except Exception as e:
+            print("ERROR:",e)
+
+    return rv
+
+
 def is_sticky(st):
     return bool(st.st_mode & stat.S_ISVTX)
 
@@ -517,6 +557,8 @@ def inst_fun(inst):
         return list_dups
     elif inst == 'list-missing':
         return list_missing
+    elif inst == 'find':
+        return find
     return None
 
 
@@ -586,17 +628,17 @@ def process_directories(dirs):
 
 def main():
     parser = build_arg_parser()
-    args = parser.parse_args()
+    args   = parser.parse_args()
 
-    dbpath = os.path.realpath(args.db)
-    verbose = args.verbose
-    restrict = restrict_fun(args.restrict)
-    func = inst_fun(args.inst)
-    sort = sort_fun(args.sort)
-    fnfilter = filter_fun(args.fnfilter)
-    maxactions = args.max
+    dbpath       = os.path.realpath(args.db)
+    verbose      = args.verbose
+    restrict     = restrict_fun(args.restrict)
+    func         = inst_fun(args.inst)
+    sort         = sort_fun(args.sort)
+    fnfilter     = filter_fun(args.fnfilter)
+    maxactions   = args.max
     breakonerror = args.break_on_error
-    directories = process_directories(args.dir)
+    directories  = process_directories(args.dir)
 
     rv = 0
     try:
