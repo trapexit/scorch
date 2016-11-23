@@ -504,9 +504,12 @@ def find(db,basepath,restrict,fnfilter,sort,
             rv = 0
             actions += 1
 
-            files = [shlex.quote(f) for f in hashdb[hashval]]
-            files.sort()
-            print(hashval,filepath,'=',' '.join(files))
+            files = ' '.join([shlex.quote(f) for f in hashdb[hashval]])
+            quoted_filepath = shlex.quote(filepath)
+            if verbose:
+                print(hashval,quoted_filepath,files)
+            else:
+                print(quoted_filepath)
         except Exception as e:
             print("ERROR:",e)
 
