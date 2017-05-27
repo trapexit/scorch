@@ -598,10 +598,8 @@ def read_db(filepath):
             raise
     return db
 
-
-def write_db(filepath,dbadd,dbremove):
+def write_db(db,filepath,dbadd,dbremove):
     try:
-        db = read_db(filepath)
 
         for (k,v) in dbadd.items():
             db[k] = v;
@@ -612,6 +610,8 @@ def write_db(filepath,dbadd,dbremove):
         (fd,tmpfilepath) = tempfile.mkstemp(dir=basepath)
         with os.fdopen(fd,'wb') as f:
             pickle.dump(db,f)
+        if os.path.isfile(filepath):
+            os.remove(filepath) # Windows: Remove the db file before for no [WinError 183] (Cannot create a file when that file already exists)
         os.rename(tmpfilepath,filepath)
     except (KeyboardInterrupt,SystemExit):
         raise
@@ -655,7 +655,7 @@ def main():
                             dbadd,dbremove)
 
             if len(dbadd) or len(dbremove):
-                write_db(dbpath,dbadd,dbremove)
+                write_db(db,dbpath,dbadd,dbremove)
 
             if breakonerror and rv:
                 break
