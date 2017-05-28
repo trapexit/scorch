@@ -34,6 +34,17 @@ import time
 
 DEFAULT_DB = '/var/tmp/scorch.db'
 
+# Define a compact version of stat object for serialization
+class CompactStat(object):
+    st_mode = 0
+    st_size = 0
+    st_mtime = 0
+
+    # class constructor
+    def __init__(self,mode,size,mtime):
+        self.st_mode = mode
+        self.st_size = size
+        self.st_mtime = mtime
 
 def build_arg_parser():
     desc = 'a tool to help discover file corruption'
@@ -186,7 +197,7 @@ def add_hashes(db,basepath,restrict,fnfilter,sort,
 
         try:
             hashval = hash_file(filepath)
-            dbadd[filepath] = (hashval,st)
+            dbadd[filepath] = (hashval,st.st_mode,st.st_size,st.st_mtime)
             if verbose:
                 print(hashval)
         except Exception as e:
@@ -224,7 +235,7 @@ def append_hashes(db,basepath,restrict,fnfilter,sort,
 
         try:
             hashval = hash_file(filepath)
-            dbadd[filepath] = (hashval,st)
+            dbadd[filepath] = (hashval,st.st_mode,st.st_size,st.st_mtime)
             if verbose:
                 print(hashval)
         except (KeyboardInterrupt,SystemExit):
@@ -262,7 +273,7 @@ def check_hashes(db,basepath,restrict,fnfilter,sort,
             print_filepath(actions,total,filepath)
 
         try:
-            oldst = db[filepath][1]
+            oldst = CompactStat(db[filepath][1], db[filepath][2], db[filepath][3])
             if different_files(oldst,st):
                 if not verbose:
                     print_filepath(actions,total,filepath)
@@ -275,7 +286,7 @@ def check_hashes(db,basepath,restrict,fnfilter,sort,
                       " - mtime:",old_time,"->",new_time)
                 if update:
                     hashval = hash_file(filepath)
-                    dbadd[filepath] = (hashval,st)
+                    dbadd[filepath] = (hashval,st.st_mode,st.st_size,st.st_mtime)
                     print(" - updated hash:",hashval)
             else:
                 hashval = hash_file(filepath)
@@ -368,7 +379,10 @@ def list_hashes(db,basepath,restrict,fnfilter,sort,
 
     actions = 0
     for filepath in filepaths:
-        (hashval,st) = db[filepath]
+        (hashval,st_mode,st_size,st_mtime) = db[filepath]
+
+        st = CompactStat(st_mode,st_size,st_mtime)
+
         if not restrict(st):
             continue
 
@@ -412,7 +426,10 @@ def list_dups(db,basepath,restrict,fnfilter,sort,
               dbadd,dbremove):
     rv = 1
     hashdb = {}
-    for (filepath,(hashval,st)) in db.items():
+    for (filepath,(hashval,st_mode,st_size,st_mtime)) in db.items():
+
+        st = CompactStat(st_mode,st_size,st_mtime)
+
         if not filepath.startswith(basepath):
             continue
         if fnfilter(filepath):
@@ -451,7 +468,10 @@ def list_missing(db,basepath,restrict,fnfilter,sort,
 
     actions = 0
     output  = []
-    for (filepath,(hashval,st)) in db.items():
+    for (filepath,(hashval,st_mode,st_size,st_mtime)) in db.items():
+
+        st = CompactStat(st_mode,st_size,st_mtime)
+
         if not filepath.startswith(basepath):
             continue
         if fnfilter(filepath):
@@ -478,7 +498,8 @@ def find(db,basepath,restrict,fnfilter,sort,
          dbadd,dbremove):
     rv = 1
     hashdb = {}
-    for (filepath,(hashval,st)) in db.items():
+    for (filepath,(hashval,st_mode,st_size,st_mtime)) in db.items():
+
         if not hashval in hashdb:
             hashdb[hashval] = [filepath]
             continue
@@ -610,7 +631,7 @@ def write_db(db,filepath,dbadd,dbremove):
         (fd,tmpfilepath) = tempfile.mkstemp(dir=basepath)
         with os.fdopen(fd,'wb') as f:
             pickle.dump(db,f)
-        if os.path.isfile(filepath):
+        if os.name == 'nt' and os.path.isfile(filepath):
             os.remove(filepath) # Windows: Remove the db file before for no [WinError 183] (Cannot create a file when that file already exists)
         os.rename(tmpfilepath,filepath)
     except (KeyboardInterrupt,SystemExit):
