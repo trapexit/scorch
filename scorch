@@ -17,6 +17,8 @@
 # OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 
 import argparse
+import collections
+import csv
 import errno
 import hashlib
 import math
@@ -26,13 +28,35 @@ import random
 import re
 import shlex
 import stat
-import subprocess
 import sys
 import tempfile
 import time
 
 
 DEFAULT_DB = '/var/tmp/scorch.db'
+
+class FileInfo(object):
+    md5   = ''
+    size  = 0
+    mode  = 0
+    mtime = 0
+
+    def __init__(self,size,mode,mtime):
+        self.size  = size
+        self.mode  = mode
+        self.mtime = mtime
+
+    def __init__(self,md5,size,mode,mtime):
+        self.md5   = md5
+        self.size  = size
+        self.mode  = mode
+        self.mtime = mtime
+
+    def __str__(self):
+        return str({'md5': self.md5,
+                    'size': self.size,
+                    'mode': self.mode,
+                    'mtime': self.mtime})
 
 
 def build_arg_parser():
@@ -126,12 +150,15 @@ def filter_filepaths(filepaths,basepath,fnfilter,other=(lambda f: False)):
     return rv
 
 
-def get_stat(filepath):
+def get_fileinfo(filepath):
     try:
         st = os.lstat(filepath)
         if not stat.S_ISREG(st.st_mode):
             return None
-        return st
+        return FileInfo(md5='',
+                        size=st.st_size,
+                        mode=st.st_mode,
+                        mtime=st.st_mtime)
     except:
         return None
 
@@ -155,9 +182,9 @@ def humansize(nbytes):
 
 # Can't use inode since filesystems based on FUSE can have those change
 # mount to mount
-def different_files(oldst,newst):
-    return ((oldst.st_size  != newst.st_size) and
-            (oldst.st_mtime != newst.st_mtime))
+def different_files(oldfi,newfi):
+    return ((oldfi.size  != newfi.size) and
+            (oldfi.mtime != newfi.mtime))
 
 
 def add_hashes(db,basepath,restrict,fnfilter,sort,
@@ -170,10 +197,10 @@ def add_hashes(db,basepath,restrict,fnfilter,sort,
     actions = 0
     total = min(maxactions,len(filepaths))
     for filepath in filepaths:
-        st = get_stat(filepath)
-        if not st:
+        fi = get_fileinfo(filepath)
+        if not fi:
             continue
-        if not restrict(st):
+        if not restrict(fi):
             continue
 
         if actions >= maxactions:
@@ -185,10 +212,10 @@ def add_hashes(db,basepath,restrict,fnfilter,sort,
             print_filepath(actions,total,filepath)
 
         try:
-            hashval = hash_file(filepath)
-            dbadd[filepath] = (hashval,st)
+            fi.md5 = hash_file(filepath)
+            dbadd[filepath] = fi
             if verbose:
-                print(hashval)
+                print(fi.md5)
         except Exception as e:
             if verbose:
                 print("ERROR:",e)
@@ -208,10 +235,10 @@ def append_hashes(db,basepath,restrict,fnfilter,sort,
     actions = 0
     total = min(maxactions,len(filepaths))
     for filepath in filepaths:
-        st = get_stat(filepath)
-        if not st:
+        fi = get_fileinfo(filepath)
+        if not fi:
             continue
-        if not restrict(st):
+        if not restrict(fi):
             continue
 
         if actions >= maxactions:
@@ -223,10 +250,10 @@ def append_hashes(db,basepath,restrict,fnfilter,sort,
             print_filepath(actions,total,filepath)
 
         try:
-            hashval = hash_file(filepath)
-            dbadd[filepath] = (hashval,st)
+            fi.md5 = hash_file(filepath)
+            dbadd[filepath] = fi
             if verbose:
-                print(hashval)
+                print(fi.md5)
         except (KeyboardInterrupt,SystemExit):
             raise
         except Exception as e:
@@ -248,10 +275,10 @@ def check_hashes(db,basepath,restrict,fnfilter,sort,
     actions = 0
     total = min(maxactions,len(filepaths))
     for filepath in filepaths:
-        st = get_stat(filepath)
-        if not st:
+        fi = get_fileinfo(filepath)
+        if not fi:
             continue
-        if not restrict(st):
+        if not restrict(fi):
             continue
 
         if actions >= maxactions:
@@ -262,25 +289,25 @@ def check_hashes(db,basepath,restrict,fnfilter,sort,
             print_filepath(actions,total,filepath)
 
         try:
-            oldst = db[filepath][1]
-            if different_files(oldst,st):
+            oldfi = db[filepath]
+            if different_files(oldfi,fi):
                 if not verbose:
                     print_filepath(actions,total,filepath)
-                old_size = humansize(oldst.st_size)
-                new_size = humansize(st.st_size)
-                old_time = time.ctime(oldst.st_mtime)
-                new_time = time.ctime(st.st_mtime)
+                old_size = humansize(oldfi.size)
+                new_size = humansize(fi.size)
+                old_time = time.ctime(oldfi.mtime)
+                new_time = time.ctime(fi.mtime)
                 print("FILE CHANGED\n",
                       "- size:",old_size,"->",new_size,"\n"
                       " - mtime:",old_time,"->",new_time)
                 if update:
-                    hashval = hash_file(filepath)
-                    dbadd[filepath] = (hashval,st)
-                    print(" - updated hash:",hashval)
+                    fi.md5 = hash_file(filepath)
+                    dbadd[filepath] = fi
+                    print(" - updated hash:",fi.md5)
             else:
-                hashval = hash_file(filepath)
-                oldhashval = db[filepath][0]
-                if hashval != oldhashval:
+                oldhashval = db[filepath].md5
+                newhashval = hash_file(filepath)
+                if newhashval != oldhashval:
                     rv = 1
                     if not verbose:
                         print_filepath(actions,total,filepath)
@@ -292,6 +319,7 @@ def check_hashes(db,basepath,restrict,fnfilter,sort,
         except (KeyboardInterrupt,SystemExit):
             raise
         except Exception as e:
+            traceback.print_exc()
             if not verbose:
                 print_filepath(actions,total,filepath)
             print('ERROR:',e)
@@ -319,8 +347,8 @@ def delete_hashes(db,basepath,restrict,fnfilter,sort,
     actions = 0
     total = min(maxactions,len(filepaths))
     for filepath in filepaths:
-        st = get_stat(filepath)
-        if st and not restrict(st):
+        fi = get_fileinfo(filepath)
+        if fi and not restrict(fi):
             continue
 
         if actions >= maxactions:
@@ -368,8 +396,8 @@ def list_hashes(db,basepath,restrict,fnfilter,sort,
 
     actions = 0
     for filepath in filepaths:
-        (hashval,st) = db[filepath]
-        if not restrict(st):
+        fi = db[filepath]
+        if not restrict(fi):
             continue
 
         if actions >= maxactions:
@@ -377,7 +405,7 @@ def list_hashes(db,basepath,restrict,fnfilter,sort,
         actions += 1
 
         rv = 0
-        print("{0} {1}".format(hashval,filepath))
+        print("{0} {1}".format(fi.md5,filepath))
 
     return rv
 
@@ -391,10 +419,10 @@ def list_unhashed(db,basepath,restrict,fnfilter,sort,
 
     actions = 0
     for filepath in filepaths:
-        st = get_stat(filepath)
-        if not st:
+        fi = get_fileinfo(filepath)
+        if not fi:
             continue
-        if not restrict(st):
+        if not restrict(fi):
             continue
 
         if actions >= maxactions:
@@ -412,19 +440,19 @@ def list_dups(db,basepath,restrict,fnfilter,sort,
               dbadd,dbremove):
     rv = 1
     hashdb = {}
-    for (filepath,(hashval,st)) in db.items():
+    for (filepath,fi) in db.items():
         if not filepath.startswith(basepath):
             continue
         if fnfilter(filepath):
             continue
-        if not restrict(st):
+        if not restrict(fi):
             continue
 
-        if not hashval in hashdb:
-            hashdb[hashval] = [filepath]
+        if not fi.md5 in hashdb:
+            hashdb[fi.md5] = [filepath]
             continue
 
-        hashdb[hashval].append(filepath)
+        hashdb[fi.md5].append(filepath)
 
     actions = 0
     for (hashval,filepaths) in hashdb.items():
@@ -451,7 +479,7 @@ def list_missing(db,basepath,restrict,fnfilter,sort,
 
     actions = 0
     output  = []
-    for (filepath,(hashval,st)) in db.items():
+    for (filepath,fi) in db.items():
         if not filepath.startswith(basepath):
             continue
         if fnfilter(filepath):
@@ -478,11 +506,11 @@ def find(db,basepath,restrict,fnfilter,sort,
          dbadd,dbremove):
     rv = 1
     hashdb = {}
-    for (filepath,(hashval,st)) in db.items():
-        if not hashval in hashdb:
-            hashdb[hashval] = [filepath]
+    for (filepath,fi) in db.items():
+        if not fi.md5 in hashdb:
+            hashdb[fi.md5] = [filepath]
             continue
-        hashdb[hashval].append(filepath)
+        hashdb[fi.md5].append(filepath)
 
     actions = 0
     filepaths = get_file_list(basepath,fnfilter)
@@ -491,10 +519,10 @@ def find(db,basepath,restrict,fnfilter,sort,
             if actions >= maxactions:
                 return rv;
 
-            st = get_stat(filepath)
-            if not st:
+            fi = get_fileinfo(filepath)
+            if not fi:
                 continue
-            if not restrict(st):
+            if not restrict(fi):
                 continue
 
             hashval = hash_file(filepath)
@@ -516,12 +544,12 @@ def find(db,basepath,restrict,fnfilter,sort,
     return rv
 
 
-def is_sticky(st):
-    return bool(st.st_mode & stat.S_ISVTX)
+def is_sticky(fi):
+    return bool(fi.mode & stat.S_ISVTX)
 
 
 def is_readonly(st):
-    return not (st.st_mode & (stat.S_IWUSR | stat.S_IWGRP | stat.S_IWOTH))
+    return not (fi.mode & (stat.S_IWUSR | stat.S_IWGRP | stat.S_IWOTH))
 
 
 def restrict_fun(rtype):
@@ -585,11 +613,36 @@ def sort_fun(sort):
     return (lambda l: None)
 
 
-def read_db(filepath):
+def read_pickle_db(filepath):
     db = {}
     try:
         with open(filepath,'rb') as f:
             db = pickle.load(f)
+        print('converting hash database...')
+        for (k,(h,st)) in db.items():
+            db[k] = FileInfo(md5=h,
+                             size=st.st_size,
+                             mode=st.st_mode,
+                             mtime=st.st_mtime)
+        write_db_core(filepath,db)
+    except:
+        pass
+
+    return db
+
+
+def read_db(filepath):
+    db = read_pickle_db(filepath)
+    if db:
+        return db
+    try:
+        with open(filepath,'rt',encoding='utf-8',newline='') as f:
+            reader = csv.reader(f,delimiter=',',quotechar='"')
+            for (filename,md5,size,mode,mtime) in reader:
+                db[filename]=FileInfo(md5,
+                                      int(size),
+                                      int(mode),
+                                      float(mtime))
     except (KeyboardInterrupt,SystemExit):
         raise
     except Exception as e:
@@ -597,6 +650,17 @@ def read_db(filepath):
         if not os.path.isdir(dirname):
             raise
     return db
+
+
+def write_db_core(filepath,db):
+    basepath = os.path.dirname(filepath)
+    (fd,tmpfilepath) = tempfile.mkstemp(dir=basepath)
+    with os.fdopen(fd,'wt',encoding='utf-8',newline='') as f:
+        writer = csv.writer(f,delimiter=',')
+        for (k,v) in db.items():
+            row = (k,v.md5,v.size,v.mode,v.mtime)
+            writer.writerow(row)
+    os.replace(tmpfilepath,filepath)
 
 
 def write_db(filepath,dbadd,dbremove):
@@ -608,16 +672,11 @@ def write_db(filepath,dbadd,dbremove):
         for k in dbremove:
             del db[k]
 
-        basepath = os.path.dirname(filepath)
-        (fd,tmpfilepath) = tempfile.mkstemp(dir=basepath)
-        with os.fdopen(fd,'wb') as f:
-            pickle.dump(db,f)
-        os.rename(tmpfilepath,filepath)
+        write_db_core(filepath,db)
     except (KeyboardInterrupt,SystemExit):
         raise
     except Exception as e:
-        print('Error writing checksum DB:',e)
-
+        print('Error writing hash DB:',e)
 
 def process_directories(dirs):
     rv = []
