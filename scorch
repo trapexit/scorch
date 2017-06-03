@@ -173,7 +173,7 @@ def print_filepath(count,total,filepath):
 
 def humansize(nbytes):
     suffixes = ['B','KB','MB','GB','TB','PB','ZB']
-    rank = int(math.log(nbytes,1024))
+    rank = int(math.log(nbytes,1024)) if nbytes else 0
     rank = min(rank, len(suffixes) - 1)
     human = nbytes / (1024.0 ** rank)
     f = ('%.2f' % human).rstrip('0').rstrip('.')
@@ -548,7 +548,7 @@ def is_sticky(fi):
     return bool(fi.mode & stat.S_ISVTX)
 
 
-def is_readonly(st):
+def is_readonly(fi):
     return not (fi.mode & (stat.S_IWUSR | stat.S_IWGRP | stat.S_IWOTH))
 
 
