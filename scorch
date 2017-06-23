@@ -78,7 +78,7 @@ def build_arg_parser():
                         nargs='+',
                         help='directories to work on')
     parser.add_argument('-v','--verbose',
-                        action='store_true',
+                        action='count',
                         help='print details of files')
     parser.add_argument('-r','--restrict',
                         choices=['sticky',
@@ -466,7 +466,10 @@ def list_dups(db,basepath,restrict,fnfilter,sort,
         rv = 0
         filepaths = [shlex.quote(filepath) for filepath in filepaths]
         filepaths.sort()
-        print(hashval,' '.join(filepaths))
+        if verbose:
+            print(hashval,'\n -','\n - '.join(filepaths))
+        else:
+            print(hashval,' '.join(filepaths))
 
     return rv
 
