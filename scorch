@@ -71,7 +71,7 @@ def build_arg_parser():
                                  'check+update','delete',
                                  'cleanup','list',
                                  'list-unhashed','list-dups',
-                                 'list-missing','find'],
+                                 'list-solo','list-missing','find'],
                         help='actions')
     parser.add_argument('dir',
                         type=str,
@@ -474,6 +474,40 @@ def list_dups(db,basepath,restrict,fnfilter,sort,
     return rv
 
 
+def list_solo(db,basepath,restrict,fnfilter,sort,
+              maxactions,verbose,breakonerror,
+              dbadd,dbremove):
+    rv = 1
+    hashdb = {}
+    for (filepath,fi) in db.items():
+        if not filepath.startswith(basepath):
+            continue
+        if fnfilter(filepath):
+            continue
+        if not restrict(fi):
+            continue
+
+        if not fi.md5 in hashdb:
+            hashdb[fi.md5] = [filepath]
+            continue
+
+        hashdb[fi.md5].append(filepath)
+
+    actions = 0
+    for (hashval,filepaths) in hashdb.items():
+        if len(filepaths) > 1:
+            continue
+
+        if actions >= maxactions:
+            return rv
+        actions += 1
+
+        rv = 0
+        print(hashval,shlex.quote(filepaths[0]))
+
+    return rv
+
+
 def list_missing(db,basepath,restrict,fnfilter,sort,
                  maxactions,verbose,breakonerror,
                  dbadd,dbremove):
@@ -589,6 +623,8 @@ def inst_fun(inst):
         return list_unhashed
     elif inst == 'list-dups':
         return list_dups
+    elif inst == 'list-solo':
+        return list_solo
     elif inst == 'list-missing':
         return list_missing
     elif inst == 'find':
