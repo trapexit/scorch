@@ -79,6 +79,7 @@ def build_arg_parser():
                         help='directories to work on')
     parser.add_argument('-v','--verbose',
                         action='count',
+                        default=0,
                         help='print details of files')
     parser.add_argument('-r','--restrict',
                         choices=['sticky',
@@ -405,7 +406,12 @@ def list_hashes(db,basepath,restrict,fnfilter,sort,
         actions += 1
 
         rv = 0
-        print("{0} {1}".format(fi.md5,filepath))
+        if verbose:
+            print("{} {}".format(fi.md5,filepath))
+        else:
+            shortfilepath = filepath[len(basepath)+1:]
+            shortfilepath = os.path.join('.',shortfilepath)
+            print("{} {}".format(fi.md5,shortfilepath))
 
     return rv
 
@@ -542,12 +548,15 @@ def find(db,basepath,restrict,fnfilter,sort,
          maxactions,verbose,breakonerror,
          dbadd,dbremove):
     rv = 1
+    sizedb = set()
     hashdb = {}
+    writer = csv.writer(sys.stdout,delimiter=',')
     for (filepath,fi) in db.items():
         if not fi.md5 in hashdb:
-            hashdb[fi.md5] = [filepath]
-            continue
+            hashdb[fi.md5] = []
+
         hashdb[fi.md5].append(filepath)
+        sizedb.add(fi.size)
 
     actions = 0
     filepaths = get_file_list(basepath,fnfilter)
@@ -562,19 +571,23 @@ def find(db,basepath,restrict,fnfilter,sort,
             if not restrict(fi):
                 continue
 
+            if fi.size not in sizedb:
+                if verbose > 1:
+                    writer.writerow(('::NOTFOUND::',filepath))
+                continue
+
             hashval = hash_file(filepath)
             if hashval not in hashdb:
+                if verbose > 1:
+                    writer.writerow(('::NOTFOUND::',filepath))
                 continue
 
             rv = 0
             actions += 1
 
-            files = ' '.join([shlex.quote(f) for f in hashdb[hashval]])
-            quoted_filepath = shlex.quote(filepath)
             if verbose:
-                print(hashval,quoted_filepath,files)
-            else:
-                print(quoted_filepath)
+                t = tuple([hashval,filepath] + hashdb[hashval])
+                writer.writerow(t)
         except Exception as e:
             print("ERROR:",e)
 
