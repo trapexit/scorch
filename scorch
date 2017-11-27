@@ -31,9 +31,11 @@ import stat
 import sys
 import tempfile
 import time
+from itertools import takewhile
 
 
 DEFAULT_DB = '/var/tmp/scorch.db'
+
 
 class FileInfo(object):
     md5   = ''
@@ -57,6 +59,43 @@ class FileInfo(object):
                     'size': self.size,
                     'mode': self.mode,
                     'mtime': self.mtime})
+
+
+class FileFilter(object):
+    def __init__(self,basepath,fnfilter,fifilter):
+        self.basepath = basepath
+        self.fnfilter = fnfilter
+        self.fifilter = fifilter
+
+
+    def filter(self,filepath,fi,other=(lambda f: False)):
+        common = commonprefix([self.basepath,filepath])
+        if common != self.basepath:
+            return True
+        if self.fnfilter(filepath):
+            return True
+        if self.fifilter(fi):
+            return True
+        if other(filepath):
+            return True
+        return False
+
+
+def allnamesequal(name):
+    return all(n==name[0] for n in name[1:])
+
+
+def commonprefix(paths, sep='/'):
+    bydirectorylevels = zip(*[p.split(sep) for p in paths])
+    return sep.join(x[0] for x in takewhile(allnamesequal, bydirectorylevels))
+
+
+def regex_type(pat):
+    try:
+        re.compile(pat)
+    except:
+        raise argparse.ArgumentTypeError
+    return pat
 
 
 def build_arg_parser():
@@ -86,11 +125,12 @@ def build_arg_parser():
                                  'readonly'],
                         help='restrict action to certain types of files')
     parser.add_argument('-f','--fnfilter',
-                        type=str,
+                        type=regex_type,
                         help='restrict action to files which match regex')
     parser.add_argument('-s','--sort',
                         choices=['none','radix','reverse-radix',
-                                 'natural','reverse-natural','random'],
+                                 'natural','reverse-natural','random',
+                                 'time-asc','time-desc'],
                         help='when adding/appending/checking sort files before acting on them')
     parser.add_argument('-m','--max',
                         type=int,
@@ -117,36 +157,41 @@ def hash_file(filepath, hasher=None, blocksize=65536):
     return hasher.hexdigest()
 
 
-def get_file_list(basepath,fnfilter,db=None):
+def get_files(basepath,filefilter,db={}):
     if os.path.isfile(basepath):
-        return [basepath]
+        fi = get_fileinfo(basepath)
+        if not fi:
+            return []
+        return [(basepath,fi)]
 
     filelist = []
     for (dirname,dirnames,filenames) in os.walk(basepath):
-        fulldirpath = os.path.join(basepath,dirname)
         for filename in filenames:
-            filepath = os.path.join(fulldirpath,filename)
-            if fnfilter(filepath):
+            filepath = os.path.join(dirname,filename)
+            if filepath in db:
                 continue
-            if db and filepath in db:
+
+            fi = get_fileinfo(filepath)
+            if not fi:
                 continue
-            filelist.append(filepath)
+
+            if filefilter.filter(filepath,fi):
+                continue
+
+            filelist.append((filepath,fi))
+
     return filelist
 
 
-def filter_filepaths(filepaths,basepath,fnfilter,other=(lambda f: False)):
-    if basepath in filepaths:
-        return [basepath]
+def filter_files(files,filefilter,other=(lambda f: False)):
+    if filefilter.basepath in files:
+        return files
 
     rv = []
-    for filepath in filepaths:
-        if not filepath.startswith(basepath):
+    for (filepath,fi) in files:
+        if filefilter.filter(filepath,fi,other):
             continue
-        if fnfilter(filepath):
-            continue
-        if other(filepath):
-            continue
-        rv.append(filepath)
+        rv.append((filepath,fi))
 
     return rv
 
@@ -188,22 +233,16 @@ def different_files(oldfi,newfi):
             (oldfi.mtime != newfi.mtime))
 
 
-def add_hashes(db,basepath,restrict,fnfilter,sort,
+def add_hashes(db,basepath,filefilter,sort,
                maxactions,verbose,breakonerror,
                dbadd,dbremove):
     rv = 1
-    filepaths = get_file_list(basepath,fnfilter)
+    filepaths = get_files(basepath,filefilter)
     sort(filepaths)
 
     actions = 0
     total = min(maxactions,len(filepaths))
-    for filepath in filepaths:
-        fi = get_fileinfo(filepath)
-        if not fi:
-            continue
-        if not restrict(fi):
-            continue
-
+    for (filepath,fi) in filepaths:
         if actions >= maxactions:
             return rv
         actions += 1
@@ -226,24 +265,18 @@ def add_hashes(db,basepath,restrict,fnfilter,sort,
     return rv
 
 
-def append_hashes(db,basepath,restrict,fnfilter,sort,
+def append_hashes(db,basepath,filefilter,sort,
                   maxactions,verbose,breakonerror,
                   dbadd,dbremove):
     rv = 1
-    filepaths = get_file_list(basepath,fnfilter,db)
+    filepaths = get_files(basepath,filefilter,db)
     sort(filepaths)
 
     actions = 0
     total = min(maxactions,len(filepaths))
-    for filepath in filepaths:
-        fi = get_fileinfo(filepath)
-        if not fi:
-            continue
-        if not restrict(fi):
-            continue
-
+    for (filepath,fi) in filepaths:
         if actions >= maxactions:
-            return rv
+            break
         actions += 1
 
         rv = 0
@@ -266,22 +299,16 @@ def append_hashes(db,basepath,restrict,fnfilter,sort,
     return rv
 
 
-def check_hashes(db,basepath,restrict,fnfilter,sort,
+def check_hashes(db,basepath,filefilter,sort,
                  maxactions,verbose,breakonerror,
                  dbadd,dbremove,update=False):
     rv = 0
-    filepaths = filter_filepaths(db.keys(),basepath,fnfilter)
+    filepaths = filter_files(db.items(),filefilter)
     sort(filepaths)
 
     actions = 0
     total = min(maxactions,len(filepaths))
-    for filepath in filepaths:
-        fi = get_fileinfo(filepath)
-        if not fi:
-            continue
-        if not restrict(fi):
-            continue
-
+    for (filepath,oldfi) in filepaths:
         if actions >= maxactions:
             return rv
         actions += 1
@@ -290,23 +317,23 @@ def check_hashes(db,basepath,restrict,fnfilter,sort,
             print_filepath(actions,total,filepath)
 
         try:
-            oldfi = db[filepath]
-            if different_files(oldfi,fi):
+            newfi = get_fileinfo(filepath)
+            if different_files(oldfi,newfi):
                 if not verbose:
                     print_filepath(actions,total,filepath)
                 old_size = humansize(oldfi.size)
-                new_size = humansize(fi.size)
+                new_size = humansize(newfi.size)
                 old_time = time.ctime(oldfi.mtime)
-                new_time = time.ctime(fi.mtime)
+                new_time = time.ctime(newfi.mtime)
                 print("FILE CHANGED\n",
                       "- size:",old_size,"->",new_size,"\n"
                       " - mtime:",old_time,"->",new_time)
                 if update:
-                    fi.md5 = hash_file(filepath)
-                    dbadd[filepath] = fi
-                    print(" - updated hash:",fi.md5)
+                    newfi.md5 = hash_file(filepath)
+                    dbadd[filepath] = newfi
+                    print(" - updated hash:",newfi.md5)
             else:
-                oldhashval = db[filepath].md5
+                oldhashval = oldfi.md5
                 newhashval = hash_file(filepath)
                 if newhashval != oldhashval:
                     rv = 1
@@ -330,28 +357,24 @@ def check_hashes(db,basepath,restrict,fnfilter,sort,
     return rv
 
 
-def check_and_update_hashes(db,basepath,restrict,fnfilter,sort,
+def check_and_update_hashes(db,basepath,filefilter,sort,
                             maxactions,verbose,breakonerror,
                             dbadd,dbremove):
-    return check_hashes(db,basepath,restrict,fnfilter,sort,
+    return check_hashes(db,basepath,filefilter,sort,
                         maxactions,verbose,breakonerror,
                         dbadd,dbremove,update=True)
 
 
-def delete_hashes(db,basepath,restrict,fnfilter,sort,
+def delete_hashes(db,basepath,filefilter,sort,
                   maxactions,verbose,breakonerror,
                   dbadd,dbremove):
     rv = 1
-    filepaths = filter_filepaths(db.keys(),basepath,fnfilter)
+    filepaths = filter_files(db.items(),filefilter)
     sort(filepaths)
 
     actions = 0
     total = min(maxactions,len(filepaths))
-    for filepath in filepaths:
-        fi = get_fileinfo(filepath)
-        if fi and not restrict(fi):
-            continue
-
+    for (filepath,fi) in filepaths:
         if actions >= maxactions:
             return rv
         actions += 1
@@ -365,16 +388,16 @@ def delete_hashes(db,basepath,restrict,fnfilter,sort,
     return rv
 
 
-def cleanup_hashes(db,basepath,restrict,fnfilter,sort,
+def cleanup_hashes(db,basepath,filefilter,sort,
                    maxactions,verbose,breakonerror,
                    dbadd,dbremove):
     rv = 1
-    filepaths = filter_filepaths(db.keys(),basepath,fnfilter,os.path.exists)
+    filepaths = filter_files(db.items(),filefilter,os.path.exists)
     sort(filepaths)
 
     actions = 0
     total = min(maxactions,len(filepaths))
-    for filepath in filepaths:
+    for (filepath,fi) in filepaths:
         if actions >= maxactions:
             return rv
         actions += 1
@@ -388,19 +411,15 @@ def cleanup_hashes(db,basepath,restrict,fnfilter,sort,
     return rv
 
 
-def list_hashes(db,basepath,restrict,fnfilter,sort,
+def list_hashes(db,basepath,filefilter,sort,
                 maxactions,verbose,breakonerror,
                 dbadd,dbremove):
     rv = 1
-    filepaths = filter_filepaths(db.keys(),basepath,fnfilter)
+    filepaths = filter_files(db.items(),filefilter)
     sort(filepaths)
 
     actions = 0
-    for filepath in filepaths:
-        fi = db[filepath]
-        if not restrict(fi):
-            continue
-
+    for (filepath,fi) in filepaths:
         if actions >= maxactions:
             return rv
         actions += 1
@@ -416,21 +435,15 @@ def list_hashes(db,basepath,restrict,fnfilter,sort,
     return rv
 
 
-def list_unhashed(db,basepath,restrict,fnfilter,sort,
+def list_unhashed(db,basepath,filefilter,sort,
                   maxactions,verbose,breakonerror,
                   dbadd,dbremove):
     rv = 1
-    filepaths = get_file_list(basepath,fnfilter,db)
+    filepaths = get_files(basepath,filefilter,db)
     sort(filepaths)
 
     actions = 0
-    for filepath in filepaths:
-        fi = get_fileinfo(filepath)
-        if not fi:
-            continue
-        if not restrict(fi):
-            continue
-
+    for (filepath,fi) in filepaths:
         if actions >= maxactions:
             return rv
         actions += 1
@@ -441,22 +454,17 @@ def list_unhashed(db,basepath,restrict,fnfilter,sort,
     return rv
 
 
-def list_dups(db,basepath,restrict,fnfilter,sort,
+def list_dups(db,basepath,filefilter,sort,
               maxactions,verbose,breakonerror,
               dbadd,dbremove):
     rv = 1
     hashdb = {}
     for (filepath,fi) in db.items():
-        if not filepath.startswith(basepath):
-            continue
-        if fnfilter(filepath):
-            continue
-        if not restrict(fi):
+        if filefilter.filter(filepath,fi):
             continue
 
         if not fi.md5 in hashdb:
-            hashdb[fi.md5] = [filepath]
-            continue
+            hashdb[fi.md5] = []
 
         hashdb[fi.md5].append(filepath)
 
@@ -480,22 +488,17 @@ def list_dups(db,basepath,restrict,fnfilter,sort,
     return rv
 
 
-def list_solo(db,basepath,restrict,fnfilter,sort,
+def list_solo(db,basepath,filefilter,sort,
               maxactions,verbose,breakonerror,
               dbadd,dbremove):
     rv = 1
     hashdb = {}
     for (filepath,fi) in db.items():
-        if not filepath.startswith(basepath):
-            continue
-        if fnfilter(filepath):
-            continue
-        if not restrict(fi):
+        if filefilter.filter(filepath,fi):
             continue
 
         if not fi.md5 in hashdb:
-            hashdb[fi.md5] = [filepath]
-            continue
+            hashdb[fi.md5] = []
 
         hashdb[fi.md5].append(filepath)
 
@@ -514,24 +517,20 @@ def list_solo(db,basepath,restrict,fnfilter,sort,
     return rv
 
 
-def list_missing(db,basepath,restrict,fnfilter,sort,
+def list_missing(db,basepath,filefilter,sort,
                  maxactions,verbose,breakonerror,
                  dbadd,dbremove):
     rv = 1
-    filepaths = get_file_list(basepath,fnfilter)
+    filepaths = get_files(basepath,filefilter)
 
     actions = 0
     output  = []
     for (filepath,fi) in db.items():
-        if not filepath.startswith(basepath):
-            continue
-        if fnfilter(filepath):
-            continue
-        if filepath in filepaths:
+        if filepath in db:
             continue
 
         if actions >= maxactions:
-            return rv
+            break
         actions += 1
 
         rv = 0
@@ -544,7 +543,7 @@ def list_missing(db,basepath,restrict,fnfilter,sort,
     return rv
 
 
-def find(db,basepath,restrict,fnfilter,sort,
+def find(db,basepath,filefilter,sort,
          maxactions,verbose,breakonerror,
          dbadd,dbremove):
     rv = 1
@@ -559,18 +558,9 @@ def find(db,basepath,restrict,fnfilter,sort,
         sizedb.add(fi.size)
 
     actions = 0
-    filepaths = get_file_list(basepath,fnfilter)
-    for filepath in filepaths:
+    filepaths = get_files(basepath,filefilter)
+    for (filepath,fi) in filepaths:
         try:
-            if actions >= maxactions:
-                return rv;
-
-            fi = get_fileinfo(filepath)
-            if not fi:
-                continue
-            if not restrict(fi):
-                continue
-
             if fi.size not in sizedb:
                 if verbose > 1:
                     writer.writerow(('::NOTFOUND::',filepath))
@@ -582,9 +572,11 @@ def find(db,basepath,restrict,fnfilter,sort,
                     writer.writerow(('::NOTFOUND::',filepath))
                 continue
 
-            rv = 0
+            if actions >= maxactions:
+                return rv;
             actions += 1
 
+            rv = 0
             if verbose:
                 t = tuple([hashval,filepath] + hashdb[hashval])
                 writer.writerow(t)
@@ -594,23 +586,23 @@ def find(db,basepath,restrict,fnfilter,sort,
     return rv
 
 
-def is_sticky(fi):
-    return bool(fi.mode & stat.S_ISVTX)
+def is_not_sticky(fi):
+    return not bool(fi.mode & stat.S_ISVTX)
 
 
-def is_readonly(fi):
+def is_not_readonly(fi):
     return not (fi.mode & (stat.S_IWUSR | stat.S_IWGRP | stat.S_IWOTH))
 
 
 def restrict_fun(rtype):
     if rtype == 'sticky':
-        return is_sticky
+        return is_not_sticky
     elif rtype == 'readonly':
-        return is_readonly
-    return (lambda st: True)
+        return is_not_readonly
+    return (lambda st: False)
 
 
-def filter_fun(regex):
+def fnfilter_fun(regex):
     if regex:
         cregex = re.compile(regex)
         return (lambda filepath: cregex.match(filepath) == None)
@@ -655,12 +647,18 @@ def sort_fun(sort):
     elif sort == 'natural':
         cre = re.compile('(\d+)')
         sort_key = lambda s: [int(t) if t.isdigit() else t.lower()
-                              for t in re.split(cre,s)]
+                              for t in re.split(cre,s[0])]
         return (lambda l: l.sort(key=sort_key))
     elif sort == 'reverse-natural':
         cre = re.compile('(\d+)')
         sort_key = lambda s: [int(t) if t.isdigit() else t.lower()
-                              for t in re.split(cre,s)]
+                              for t in re.split(cre,s[0])]
+        return (lambda l: l.sort(key=sort_key,reverse=True))
+    elif sort == 'time-asc':
+        sort_key = lambda s: s[1].mtime
+        return (lambda l: l.sort(key=sort_key))
+    elif sort == 'time-desc':
+        sort_key = lambda s: s[1].mtime
         return (lambda l: l.sort(key=sort_key,reverse=True))
     return (lambda l: None)
 
@@ -746,10 +744,10 @@ def main():
 
     dbpath       = os.path.realpath(args.db)
     verbose      = args.verbose
-    restrict     = restrict_fun(args.restrict)
     func         = inst_fun(args.inst)
     sort         = sort_fun(args.sort)
-    fnfilter     = filter_fun(args.fnfilter)
+    fnfilter     = fnfilter_fun(args.fnfilter)
+    fifilter     = restrict_fun(args.restrict)
     maxactions   = args.max
     breakonerror = args.break_on_error
     directories  = process_directories(args.dir)
@@ -757,11 +755,15 @@ def main():
     rv = 0
     try:
         for directory in directories:
+            filefilter = FileFilter(basepath=directory,
+                                    fnfilter=fnfilter,
+                                    fifilter=fifilter)
             db = read_db(dbpath)
             dbadd = {}
             dbremove = []
+            filefilter.basepath = directory
 
-            rv = rv or func(db,directory,restrict,fnfilter,sort,
+            rv = rv or func(db,directory,filefilter,sort,
                             maxactions,verbose,breakonerror,
                             dbadd,dbremove)
 
@@ -779,7 +781,7 @@ def main():
             print(e)
     except Exception as e:
         rv = 1
-        print(e)
+        raise
 
     sys.exit(rv)
 
