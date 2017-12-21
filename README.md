@@ -105,3 +105,22 @@ scorch -d /var/tmp/hash.db cleanup /tmp/files
 ```
 
 Since if a file's modify time or size change it is likely it was changed intentionally the **check+update** instruction will warn about the change and update the database rather than indicating it's a corruption ("FAILED"). Only if the mtime and size are the same and the hashes differ do we consider it corrupted.
+
+# Support
+
+#### Contact / Issue submission
+* github.com: https://github.com/trapexit/scorch/issues
+* email: trapexit@spawn.link
+* twitter: https://twitter.com/_trapexit
+
+#### Support development
+
+This software is free to use and released under a very liberal license. That said if you like this software and would like to support its development donations are welcome.
+
+* Bitcoin (BTC): 12CdMhEPQVmjz3SSynkAEuD5q9JmhTDCZA
+* Bitcoin Cash (BCH): 1AjPqZZhu7GVEs6JFPjHmtsvmDL4euzMzp
+* Ethereum (ETH): 0x09A166B11fCC127324C7fc5f1B572255b3046E94
+* Litecoin (LTC): LXAsq6yc6zYU3EbcqyWtHBrH1Ypx4GjUjm
+* Ripple (XRP): rNACR2hqGjpbHuCKwmJ4pDpd2zRfuRATcE
+* PayPal: trapexit@spawn.link
+* Patreon: https://www.patreon.com/trapexit
