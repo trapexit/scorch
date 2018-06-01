@@ -4,16 +4,16 @@ A tool to help discover silent corruption on a filesystem. If using ZFS, BTRFS, 
 
 ### Usage
 ```
-usage: scorch [-h] -d DB [-v] [-r {sticky,readonly}] [-f FNFILTER]
+usage: scorch [-h] [-d DB] [-v] [-r {sticky,readonly}] [-f FNFILTER]
               [-s {none,radix,reverse-radix,natural,reverse-natural,random}]
               [-m MAX] [-b]
-              {add,append,check,check+update,delete,cleanup,list,list-unhashed,list-dups}
+              {add,append,check,check+update,delete,cleanup,list,list-unhashed,list-dups,list-solo,list-missing,find}
               dir [dir ...]
 
 a tool to help discover file corruption
 
 positional arguments:
-  {add,append,check,check+update,delete,cleanup,list,list-unhashed,list-dups}
+  {add,append,check,check+update,delete,cleanup,list,list-unhashed,list-dups,list-solo,list-missing,find}
                         actions
   dir                   directories to work on
 
@@ -30,7 +30,6 @@ optional arguments:
                         acting on them
   -m MAX, --max MAX     max number of actions to take
   -b, --break-on-error  break on first failure / error
-
 ```
 
 ### Instructions
@@ -44,6 +43,9 @@ optional arguments:
 * list: a **md5sum** compatible listing of files and their hashes.
 * list-unhashed: list files which are not hashed in the database.
 * list-dups: returns a listing of files which have the same hash value.
+* list-solo: returns a listing of files which are unique (opposite of list-dups)
+* list-missing: returns a listing of files present in the DB but not on the filesystem
+* find: searches for the target in the hash DB (outputs CSV)
 
 ### Example
 
