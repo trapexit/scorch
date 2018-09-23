@@ -110,7 +110,9 @@ def build_arg_parser():
                                  'check+update','delete',
                                  'cleanup','list',
                                  'list-unhashed','list-dups',
-                                 'list-solo','list-missing','find'],
+                                 'list-solo','list-missing',
+                                 'in-db',
+                                 'found-in-db','notfound-in-db'],
                         help='actions')
     parser.add_argument('dir',
                         type=str,
@@ -212,6 +214,7 @@ def get_fileinfo(filepath):
 def print_filepath(count,total,filepath):
     padding = len(str(total))
     padded = str(count).zfill(padding)
+    filepath = shlex.quote(filepath)
     s = '{0}/{1} {2}: '.format(padded,total,filepath)
     print(s,end='')
     sys.stdout.flush()
@@ -247,18 +250,20 @@ def add_hashes(db,basepath,filefilter,sort,
             return rv
         actions += 1
 
-        rv = 0
         if verbose:
             print_filepath(actions,total,filepath)
 
         try:
             fi.md5 = hash_file(filepath)
             dbadd[filepath] = fi
+            rv = 0
             if verbose:
                 print(fi.md5)
+        except (KeyboardInterrupt,SystemExit):
+            raise
         except Exception as e:
             if verbose:
-                print("ERROR:",e)
+                print('ERROR:',e)
             if breakonerror:
                 break
 
@@ -279,13 +284,13 @@ def append_hashes(db,basepath,filefilter,sort,
             break
         actions += 1
 
-        rv = 0
         if verbose:
             print_filepath(actions,total,filepath)
 
         try:
             fi.md5 = hash_file(filepath)
             dbadd[filepath] = fi
+            rv = 0
             if verbose:
                 print(fi.md5)
         except (KeyboardInterrupt,SystemExit):
@@ -313,43 +318,37 @@ def check_hashes(db,basepath,filefilter,sort,
             return rv
         actions += 1
 
-        if verbose:
-            print_filepath(actions,total,filepath)
-
         try:
             newfi = get_fileinfo(filepath)
             if different_files(oldfi,newfi):
-                if not verbose:
-                    print_filepath(actions,total,filepath)
+                print_filepath(actions,total,filepath)
                 old_size = humansize(oldfi.size)
                 new_size = humansize(newfi.size)
                 old_time = time.ctime(oldfi.mtime)
                 new_time = time.ctime(newfi.mtime)
-                print("FILE CHANGED\n",
-                      "- size:",old_size,"->",new_size,"\n"
-                      " - mtime:",old_time,"->",new_time)
+                print('FILE CHANGED\n',
+                      '- size:',old_size,'->',new_size,'\n'
+                      ' - mtime:',old_time,'->',new_time)
                 if update:
                     newfi.md5 = hash_file(filepath)
                     dbadd[filepath] = newfi
-                    print(" - updated hash:",newfi.md5)
+                    print(' - hash:',oldfi.md5,'->',newfi.md5)
             else:
                 oldhashval = oldfi.md5
                 newhashval = hash_file(filepath)
                 if newhashval != oldhashval:
                     rv = 1
-                    if not verbose:
-                        print_filepath(actions,total,filepath)
-                    print("FAILED")
+                    print_filepath(actions,total,filepath)
+                    print('FAILED')
                     if breakonerror:
                         break
                 elif verbose:
-                    print("OK")
+                    print_filepath(actions,total,filepath)
+                    print('OK')
         except (KeyboardInterrupt,SystemExit):
             raise
         except Exception as e:
-            traceback.print_exc()
-            if not verbose:
-                print_filepath(actions,total,filepath)
+            print_filepath(actions,total,filepath)
             print('ERROR:',e)
             if breakonerror:
                 break
@@ -381,9 +380,11 @@ def delete_hashes(db,basepath,filefilter,sort,
 
         rv = 0
         dbremove.append(filepath)
-        if verbose:
+        if verbose == 1:
+            print(shlex.quote(filepath))
+        elif verbose == 2:
             print_filepath(actions,total,filepath)
-            print("removed")
+            print('removed')
 
     return rv
 
@@ -406,7 +407,7 @@ def cleanup_hashes(db,basepath,filefilter,sort,
         dbremove.append(filepath)
         if verbose:
             print_filepath(actions,total,filepath)
-            print("removed")
+            print('removed')
 
     return rv
 
@@ -426,11 +427,11 @@ def list_hashes(db,basepath,filefilter,sort,
 
         rv = 0
         if verbose:
-            print("{} {}".format(fi.md5,filepath))
+            print('{} {}'.format(fi.md5,filepath))
         else:
             shortfilepath = filepath[len(basepath)+1:]
             shortfilepath = os.path.join('.',shortfilepath)
-            print("{} {}".format(fi.md5,shortfilepath))
+            print('{} {}'.format(fi.md5,shortfilepath))
 
     return rv
 
@@ -543,9 +544,50 @@ def list_missing(db,basepath,filefilter,sort,
     return rv
 
 
-def find(db,basepath,filefilter,sort,
-         maxactions,verbose,breakonerror,
-         dbadd,dbremove):
+def in_db(db,basepath,filefilter,sort,
+          maxactions,verbose,breakonerror,
+          dbadd,dbremove):
+    rv = 1
+    sizedb = set()
+    hashdb = {}
+    for (filepath,fi) in db.items():
+        if not fi.md5 in hashdb:
+            hashdb[fi.md5] = []
+
+        hashdb[fi.md5].append(filepath)
+        sizedb.add(fi.size)
+
+    actions = 0
+    filepaths = get_files(basepath,filefilter)
+    total = min(maxactions,len(filepaths))    
+    for (filepath,fi) in filepaths:
+        try:
+            if actions >= maxactions:
+                return rv;
+            actions += 1
+
+            print_filepath(actions,total,filepath)
+            if fi.size not in sizedb:
+                print("NO")
+            else:
+                hashval = hash_file(filepath)
+                if hashval not in hashdb:
+                    print("NO")
+                else:
+                    print("YES")
+
+            rv = 0
+        except (KeyboardInterrupt,SystemExit):
+            raise
+        except Exception as e:
+            print('ERROR:',e)
+
+    return rv
+
+
+def found_in_db(db,basepath,filefilter,sort,
+                maxactions,verbose,breakonerror,
+                dbadd,dbremove):
     rv = 1
     sizedb = set()
     hashdb = {}
@@ -561,27 +603,87 @@ def find(db,basepath,filefilter,sort,
     filepaths = get_files(basepath,filefilter)
     for (filepath,fi) in filepaths:
         try:
-            if fi.size not in sizedb:
-                if verbose > 1:
-                    writer.writerow(('::NOTFOUND::',filepath))
-                continue
-
-            hashval = hash_file(filepath)
-            if hashval not in hashdb:
-                if verbose > 1:
-                    writer.writerow(('::NOTFOUND::',filepath))
-                continue
-
             if actions >= maxactions:
                 return rv;
             actions += 1
 
+            if fi.size not in sizedb:
+                continue
+
+            hashval = hash_file(filepath)
+            if hashval not in hashdb:
+                continue
+
             rv = 0
-            if verbose:
+            if verbose in [1,2]:
+                if verbose == 1:
+                    filepath = os.path.join('.',filepath[len(basepath)+1:])
+                print(shlex.quote(filepath))
+            elif verbose in [3,4]:
+                if verbose == 3:
+                    filepath = os.path.join('.',filepath[len(basepath)+1:])
+                print(hashval,shlex.quote(filepath))
+            elif verbose >= 5:
                 t = tuple([hashval,filepath] + hashdb[hashval])
                 writer.writerow(t)
+        except (KeyboardInterrupt,SystemExit):
+            raise
         except Exception as e:
-            print("ERROR:",e)
+            print('ERROR:',e)
+
+    return rv
+
+
+def notfound_in_db(db,basepath,filefilter,sort,
+                   maxactions,verbose,breakonerror,
+                   dbadd,dbremove):
+    rv = 1
+    hashes = set()
+    sizes  = set()
+    for (filepath,fi) in db.items():
+        hashes.add(fi.md5)
+        sizes.add(fi.size)
+
+    actions = 0
+    filepaths = get_files(basepath,filefilter)
+    for (filepath,fi) in filepaths:
+        try:
+            if actions >= maxactions:
+                return rv;
+            actions += 1
+
+            if verbose == 0:
+                if fi.size in sizes:
+                    hashval = hash_file(filepath)
+                    if hashval in hashes:
+                        continue
+            elif verbose in [1,2]:
+                printpath = filepath
+                if verbose == 1:
+                    printpath = os.path.join('.',filepath[len(basepath)+1:])
+                if fi.size not in sizes:
+                    print(shlex.quote(printpath))
+                else:
+                    hashval = hash_file(filepath)
+                    if hashval not in hashes:
+                        print(shlex.quote(printpath))
+                    else:
+                        continue
+            elif verbose in [3,4]:
+                printpath = filepath
+                if verbose == 3:
+                    printpath = os.path.join('.',filepath[len(basepath)+1:])
+                hashval = hash_file(filepath)
+                if hashval not in hashes:
+                    print(hashval,shlex.quote(printpath))
+                else:
+                    continue
+
+            rv = 0
+        except (KeyboardInterrupt,SystemExit):
+            raise
+        except Exception as e:
+            print('ERROR:',e)
 
     return rv
 
@@ -632,8 +734,12 @@ def inst_fun(inst):
         return list_solo
     elif inst == 'list-missing':
         return list_missing
-    elif inst == 'find':
-        return find
+    elif inst == 'in-db':
+        return in_db
+    elif inst == 'found-in-db':
+        return found_in_db
+    elif inst == 'notfound-in-db':
+        return notfound_in_db
     return None
 
 
@@ -728,6 +834,7 @@ def write_db(filepath,dbadd,dbremove):
     except Exception as e:
         print('Error writing hash DB:',e)
 
+
 def process_directories(dirs):
     rv = []
     for d in dirs:
@@ -786,5 +893,5 @@ def main():
     sys.exit(rv)
 
 
-if __name__ == "__main__":
+if __name__ == '__main__':
     main()
