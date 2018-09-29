@@ -320,6 +320,12 @@ def check_hashes(db,basepath,filefilter,sort,
 
         try:
             newfi = get_fileinfo(filepath)
+            if not newfi:
+                if verbose:
+                    print_filepath(actions,total,filepath)
+                    print('MISSING')
+                continue
+
             if different_files(oldfi,newfi):
                 print_filepath(actions,total,filepath)
                 old_size = humansize(oldfi.size)
@@ -334,16 +340,19 @@ def check_hashes(db,basepath,filefilter,sort,
                     dbadd[filepath] = newfi
                     print(' - hash:',oldfi.md5,'->',newfi.md5)
             else:
+                if verbose:
+                    print_filepath(actions,total,filepath)
+
                 oldhashval = oldfi.md5
                 newhashval = hash_file(filepath)
                 if newhashval != oldhashval:
                     rv = 1
-                    print_filepath(actions,total,filepath)
+                    if not verbose:
+                        print_filepath(actions,total,filepath)
                     print('FAILED')
                     if breakonerror:
                         break
                 elif verbose:
-                    print_filepath(actions,total,filepath)
                     print('OK')
         except (KeyboardInterrupt,SystemExit):
             raise
@@ -559,7 +568,7 @@ def in_db(db,basepath,filefilter,sort,
 
     actions = 0
     filepaths = get_files(basepath,filefilter)
-    total = min(maxactions,len(filepaths))    
+    total = min(maxactions,len(filepaths))
     for (filepath,fi) in filepaths:
         try:
             if actions >= maxactions:
