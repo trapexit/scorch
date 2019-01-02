@@ -26,7 +26,7 @@ positional arguments:
                            * notfound-in-db: print files not found in DB
   directory:               Directory or file to scan
 
-[<1;77;35moptional arguments:
+optional arguments:
   -d, --db=:               File to store hashes and other metadata in.
                            (default: /var/tmp/scorch/scorch.db)
   -v, --verbose:           Make `instruction` more verbose. Actual behavior
