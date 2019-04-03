@@ -964,14 +964,16 @@ def main():
                                      fnfilter=fnfilter,
                                      fifilter=fifilter)
 
-            rv = rv | func(opts,directory,db,dbadd,dbremove)
+            try:
+                rv = rv | func(opts,directory,db,dbadd,dbremove)
+            except (KeyboardInterrupt,SystemExit):
+                pass
 
             if len(dbadd) or len(dbremove):
                 write_db(dbpath,dbadd,dbremove)
 
             if opts.breakonerror and rv:
                 break
-
     except (KeyboardInterrupt,SystemExit):
         pass
     except IOError as e:
