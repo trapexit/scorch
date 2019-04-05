@@ -49,7 +49,8 @@ class Options(object):
     quote        = 0
     sort         = None
     filter       = None
-    maxactions   = 0
+    maxactions   = sys.maxsize
+    maxdata      = sys.maxsize
     breakonerror = False
 
 
@@ -157,7 +158,8 @@ optional arguments:
                            * reverse-radix: RADIX sort, descending
                            * time: sort by file mtime, ascending
                            * reverse-time: sort by file mtime, descending
-  -m, --maxactions=:       Max actions to take before exiting (default: -1)
+  -m, --maxactions=:       Max actions to take before exiting (default: maxint)
+  -M, --maxdata=:          Max bytes to process before exiting (default: maxint)
   -b, --break-on-error:    Any error or hash failure will exit
   -h, --help:              Print this message
 '''
@@ -199,6 +201,9 @@ def build_arg_parser():
     parser.add_argument('-m','--maxactions',
                         type=int,
                         default=sys.maxsize)
+    parser.add_argument('-M','--maxdata',
+                        type=str,
+                        default=str(sys.maxsize))
     parser.add_argument('-b','--break-on-error',
                         action='store_true',
                         default=False)
@@ -274,20 +279,40 @@ def get_fileinfo(filepath):
         return None
 
 
-def print_filepath(filepath,count=0,total=0,quote=False,end=''):
+def print_filepath(filepath,count=0,total=0,data=0,quote=False,end=''):
     if quote:
         filepath = shlex.quote(filepath)
 
+    s = ''
     if count or total:
         padding = len(str(total))
         padded = str(count).zfill(padding)
-        s = '{0}/{1} {2}: '.format(padded,total,filepath)
-    else:
-        s = filepath
+        s = '{0}/{1}'.format(padded,total)
+
+    if data:
+        s += ' {} '.format(humansize(data))
+
+    s += filepath + ': '
 
     print(s,end=end)
 
     sys.stdout.flush()
+
+
+def human_to_bytes(s):
+    m = s[-1]
+    if   m == 'K':
+        i = int(s[0:-1]) * 1024
+    elif m == 'M':
+        i = int(s[0:-1]) * 1024 * 1024
+    elif m == 'G':
+        i = int(s[0:-1]) * 1024 * 1024 * 1024
+    elif m == 'T':
+        i = int(s[0:-1]) * 1024 * 1024 * 1024 * 1024
+    else:
+        i = int(s)
+
+    return i
 
 
 def humansize(nbytes):
@@ -295,7 +320,7 @@ def humansize(nbytes):
     rank = int(math.log(nbytes,1024)) if nbytes else 0
     rank = min(rank, len(suffixes) - 1)
     human = nbytes / (1024.0 ** rank)
-    f = ('%.2f' % human).rstrip('0').rstrip('.')
+    f = ('%.2f' % human)
     return '%s%s' % (f, suffixes[rank])
 
 
@@ -310,14 +335,19 @@ def add_hashes(opts,path,db,dbadd,dbremove):
     opts.sort(filepaths)
 
     actions = 0
+    processed = 0
     total = min(opts.maxactions,len(filepaths))
     for (filepath,fi) in filepaths:
         if actions >= opts.maxactions:
-            return rv
-        actions += 1
+            break
+        if processed >= opts.maxdata:
+            break
+
+        actions   += 1
+        processed += fi.size
 
         if opts.verbose:
-            print_filepath(filepath,actions,total,opts.quote)
+            print_filepath(filepath,actions,total,processed,opts.quote)
 
         try:
             fi.md5 = hash_file(filepath)
@@ -342,14 +372,19 @@ def append_hashes(opts,path,db,dbadd,dbremote):
     opts.sort(filepaths)
 
     actions = 0
+    processed = 0
     total = min(opts.maxactions,len(filepaths))
     for (filepath,fi) in filepaths:
         if actions >= opts.maxactions:
             break
-        actions += 1
+        if processed >= opts.maxdata:
+            break
+
+        actions   += 1
+        processed += fi.size
 
         if opts.verbose:
-            print_filepath(filepath,actions,total,opts.quote)
+            print_filepath(filepath,actions,total,processed,opts.quote)
 
         try:
             fi.md5 = hash_file(filepath)
@@ -374,24 +409,29 @@ def check_hashes(opts,path,db,dbadd,dbremove,update=False):
     opts.sort(filepaths)
 
     actions = 0
+    processed = 0
     total = min(opts.maxactions,len(filepaths))
     for (filepath,oldfi) in filepaths:
         if actions >= opts.maxactions:
-            return rv
-        actions += 1
+            break
+        if processed >= opts.maxdata:
+            break
+
+        actions   += 1
+        processed += oldfi.size
 
         try:
             newfi = get_fileinfo(filepath)
             if not newfi:
                 if opts.verbose:
-                    print_filepath(filepath,actions,total,opts.quote)
+                    print_filepath(filepath,actions,total,processed,opts.quote)
                     print('MISSING')
                 continue
 
             if different_files(oldfi,newfi):
                 rv = rv | ERROR_HASH_MISMATCH
                 if opts.verbose:
-                    print_filepath(filepath,actions,total,opts.quote)
+                    print_filepath(filepath,actions,total,processed,opts.quote)
                 old_size = humansize(oldfi.size)
                 new_size = humansize(newfi.size)
                 old_time = time.ctime(oldfi.mtime)
@@ -407,14 +447,14 @@ def check_hashes(opts,path,db,dbadd,dbremove,update=False):
                         print(' - hash:',oldfi.md5,'->',newfi.md5)
             else:
                 if opts.verbose:
-                    print_filepath(filepath,actions,total,opts.quote)
+                    print_filepath(filepath,actions,total,processed,opts.quote)
 
                 oldhashval = oldfi.md5
                 newhashval = hash_file(filepath)
                 if newhashval != oldhashval:
                     rv = rv | ERROR_HASH_MISMATCH
                     if not opts.verbose:
-                        print_filepath(filepath,actions,total,opts.quote)
+                        print_filepath(filepath,actions,total,processed,opts.quote)
                     else:
                         print('FAILED')
                     if opts.breakonerror:
@@ -426,7 +466,7 @@ def check_hashes(opts,path,db,dbadd,dbremove,update=False):
         except Exception as e:
             rv = rv | ERROR_PROCESSING
             if opts.verbose:
-                print_filepath(filepath,actions,total,opts.quote)
+                print_filepath(filepath,actions,total,processed,opts.quote)
                 print('ERROR -',e)
             if opts.breakonerror:
                 break
@@ -444,17 +484,22 @@ def delete_hashes(opts,path,db,dbadd,dbremove):
     opts.sort(filepaths)
 
     actions = 0
+    processed = 0
     total = min(opts.maxactions,len(filepaths))
     for (filepath,fi) in filepaths:
         if actions >= opts.maxactions:
-            return rv
-        actions += 1
+            break
+        if processed >= opts.maxdata:
+            break
+
+        actions   += 1
+        processed += fi.size
 
         dbremove.append(filepath)
         if opts.verbose == 1:
             print_filepath(filepath,quote=opts.quote,end='\n')
         elif opts.verbose == 2:
-            print_filepath(filepath,actions,total,opts.quote)
+            print_filepath(filepath,actions,total,processed,opts.quote)
             print('REMOVED')
 
     return rv
@@ -466,15 +511,20 @@ def cleanup_hashes(opts,path,db,dbadd,dbremove):
     opts.sort(filepaths)
 
     actions = 0
+    processed = 0
     total = min(opts.maxactions,len(filepaths))
     for (filepath,fi) in filepaths:
         if actions >= opts.maxactions:
-            return rv
-        actions += 1
+            break
+        if processed >= opts.maxdata:
+            break
+
+        actions   += 1
+        processed += fi.size
 
         dbremove.append(filepath)
         if opts.verbose:
-            print_filepath(filepath,actions,total,opts.quote)
+            print_filepath(filepath,actions,total,processed,opts.quote)
             print('REMOVED')
 
     return rv
@@ -486,10 +536,15 @@ def list_hashes(opts,path,db,dbadd,dbremove):
     opts.sort(filepaths)
 
     actions = 0
+    processed = 0
     for (filepath,fi) in filepaths:
         if actions >= opts.maxactions:
-            return rv
-        actions += 1
+            break
+        if processed >= opts.maxdata:
+            break
+
+        actions   += 1
+        processed += fi.size
 
         if not opts.verbose:
             filepath = filepath[len(path)+1:]
@@ -508,10 +563,15 @@ def list_unhashed(opts,path,db,dbadd,dbremove):
     opts.sort(filepaths)
 
     actions = 0
+    processed = 0
     for (filepath,fi) in filepaths:
         if actions >= opts.maxactions:
-            return rv
-        actions += 1
+            break
+        if processed >= opts.maxdata:
+            break
+
+        actions   += 1
+        processed += fi.size
 
         if not opts.verbose:
             filepath = filepath[len(path)+1:]
@@ -540,7 +600,8 @@ def list_dups(opts,path,db,dbadd,dbremove):
             continue
 
         if actions >= opts.maxactions:
-            return rv
+            break
+
         actions += 1
 
         if opts.quote:
@@ -588,6 +649,7 @@ def list_missing(opts,path,db,dbadd,dbremove):
     filepaths = dict(filepaths)
 
     actions = 0
+    processed = 0
     output  = []
     for (filepath,fi) in db.items():
         if commonprefix([path,filepath]) != path:
@@ -598,7 +660,11 @@ def list_missing(opts,path,db,dbadd,dbremove):
 
         if actions >= opts.maxactions:
             break
-        actions += 1
+        if processed >= opts.maxdata:
+            break
+
+        actions   += 1
+        processed += fi.size
 
         output.append((filepath,fi))
 
@@ -624,15 +690,20 @@ def in_db(opts,path,db,dbadd,dbremove):
         sizedb.add(fi.size)
 
     actions = 0
+    processed = 0
     filepaths = get_files(path,opts.filter)
     total = min(opts.maxactions,len(filepaths))
     for (filepath,fi) in filepaths:
         try:
             if actions >= opts.maxactions:
-                return rv;
-            actions += 1
+                break
+            if processed >= opts.maxdata:
+                break
 
-            print_filepath(actions,total,filepath,opts.quote)
+            actions   += 1
+            processed += fi.size
+
+            print_filepath(filepath,actions,total,processed,opts.quote)
             if fi.size not in sizedb:
                 rv = rv | ERROR_HASH_MISMATCH
                 print("NO")
@@ -665,12 +736,17 @@ def found_in_db(opts,path,db,dbadd,dbremove):
         sizedb.add(fi.size)
 
     actions = 0
+    processed = 0
     filepaths = get_files(path,opts.filter)
     for (filepath,fi) in filepaths:
         try:
             if actions >= opts.maxactions:
-                return rv;
-            actions += 1
+                break
+            if processed >= opts.maxdata:
+                break
+
+            actions   += 1
+            processed += fi.size
 
             if fi.size not in sizedb:
                 rv = rv | ERROR_NOT_FOUND
@@ -714,12 +790,17 @@ def notfound_in_db(opts,path,db,dbadd,dbremove):
         sizes.add(fi.size)
 
     actions = 0
+    processed = 0
     filepaths = get_files(path,opts.filter)
     for (filepath,fi) in filepaths:
         try:
             if actions >= opts.maxactions:
-                return rv;
-            actions += 1
+                break
+            if processed >= opts.maxdata:
+                break
+
+            actions   += 1
+            processed += fi.size
 
             if opts.verbose == 0:
                 if fi.size in sizes:
@@ -945,6 +1026,7 @@ def main():
     opts.quote        = args.quote
     opts.sort         = sort_fun(args.sort)
     opts.maxactions   = args.maxactions
+    opts.maxdata      = human_to_bytes(args.maxdata)
     opts.breakonerror = args.break_on_error
 
     dbpath       = process_dbpath(args.db)
