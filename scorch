@@ -165,6 +165,7 @@ optional arguments:
 '''
     print(help)
 
+
 def build_arg_parser():
     parser = argparse.ArgumentParser(add_help=False)
     parser.add_argument('-d','--db',
@@ -324,9 +325,8 @@ def humansize(nbytes):
     return '%s%s' % (f, suffixes[rank])
 
 
-def different_files(oldfi,newfi):
-    return ((oldfi.size  != newfi.size) or
-            (oldfi.mtime != newfi.mtime))
+def different_sizes(oldfi,newfi):
+    return (oldfi.size != newfi.size)
 
 
 def add_hashes(opts,path,db,dbadd,dbremove):
@@ -428,7 +428,7 @@ def check_hashes(opts,path,db,dbadd,dbremove,update=False):
                     print('MISSING')
                 continue
 
-            if different_files(oldfi,newfi):
+            if different_sizes(oldfi,newfi):
                 rv = rv | ERROR_HASH_MISMATCH
                 if opts.verbose:
                     print_filepath(filepath,actions,total,processed,opts.quote)
