@@ -44,7 +44,8 @@ optional arguments:
                            * reverse-radix: RADIX sort, descending
                            * time: sort by file mtime, ascending
                            * reverse-time: sort by file mtime, descending
-  -m, --maxactions=:       Max actions to take before exiting (default: -1)
+  -m, --maxactions=:       Max actions to take before exiting (default: maxint)
+  -M, --maxdata=:          Max bytes to process before exiting (default: maxint)
   -b, --break-on-error:    Any error or hash failure will exit
   -h, --help:              Print this message
 ```
@@ -154,4 +155,3 @@ This software is free to use and released under a very liberal license. That sai
 * Bitcoin Cash (BCH): 1AjPqZZhu7GVEs6JFPjHmtsvmDL4euzMzp
 * Ethereum (ETH): 0x09A166B11fCC127324C7fc5f1B572255b3046E94
 * Litecoin (LTC): LXAsq6yc6zYU3EbcqyWtHBrH1Ypx4GjUjm
-* Ripple (XRP): rNACR2hqGjpbHuCKwmJ4pDpd2zRfuRATcE
