@@ -423,28 +423,25 @@ def check_hashes(opts,path,db,dbadd,dbremove,update=False):
         try:
             newfi = get_fileinfo(filepath)
             if not newfi:
-                if opts.verbose:
-                    print_filepath(filepath,actions,total,processed,opts.quote)
-                    print('MISSING')
+                print_filepath(filepath,actions,total,processed,opts.quote)
+                print('MISSING')
                 continue
 
             if different_sizes(oldfi,newfi):
                 rv = rv | ERROR_HASH_MISMATCH
-                if opts.verbose:
-                    print_filepath(filepath,actions,total,processed,opts.quote)
+                print_filepath(filepath,actions,total,processed,opts.quote)
                 old_size = humansize(oldfi.size)
                 new_size = humansize(newfi.size)
                 old_time = time.ctime(oldfi.mtime)
                 new_time = time.ctime(newfi.mtime)
-                if opts.verbose:
-                    print('FILE CHANGED\n',
-                          '- size:',old_size,'->',new_size,'\n'
-                          ' - mtime:',old_time,'->',new_time)
+                print('FILE CHANGED\n'
+                      ' - size: {} -> {}\n'
+                      ' - mtime: {} -> {}'.format(old_size,new_size,
+                                                  old_time,new_time))
                 if update:
                     newfi.md5 = hash_file(filepath)
                     dbadd[filepath] = newfi
-                    if opts.verbose:
-                        print(' - hash:',oldfi.md5,'->',newfi.md5)
+                    print(' - hash: {} -> {}'.format(oldfi.md5,newfi.md5))
             else:
                 if opts.verbose:
                     print_filepath(filepath,actions,total,processed,opts.quote)
@@ -455,8 +452,7 @@ def check_hashes(opts,path,db,dbadd,dbremove,update=False):
                     rv = rv | ERROR_HASH_MISMATCH
                     if not opts.verbose:
                         print_filepath(filepath,actions,total,processed,opts.quote)
-                    else:
-                        print('FAILED')
+                    print('FAILED')
                     if opts.breakonerror:
                         break
                 elif opts.verbose:
@@ -465,9 +461,8 @@ def check_hashes(opts,path,db,dbadd,dbremove,update=False):
             break
         except Exception as e:
             rv = rv | ERROR_PROCESSING
-            if opts.verbose:
-                print_filepath(filepath,actions,total,processed,opts.quote)
-                print('ERROR -',e)
+            print_filepath(filepath,actions,total,processed,opts.quote)
+            print('ERROR -',e)
             if opts.breakonerror:
                 break
 
