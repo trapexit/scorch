@@ -434,10 +434,14 @@ def check_hashes(opts,path,db,dbadd,dbremove,update=False):
                 new_size = humansize(newfi.size)
                 old_time = time.ctime(oldfi.mtime)
                 new_time = time.ctime(newfi.mtime)
+                old_mode = oct(oldfi.mode)
+                new_mode = oct(newfi.mode)
                 print('FILE CHANGED\n'
                       ' - size: {} -> {}\n'
-                      ' - mtime: {} -> {}'.format(old_size,new_size,
-                                                  old_time,new_time))
+                      ' - mtime: {} -> {}\n'
+                      ' - mode: {} -> {}'.format(old_size,new_size,
+                                                 old_time,new_time,
+                                                 old_mode,new_mode))
                 if update:
                     newfi.md5 = hash_file(filepath)
                     dbadd[filepath] = newfi
@@ -457,6 +461,12 @@ def check_hashes(opts,path,db,dbadd,dbremove,update=False):
                         break
                 elif opts.verbose:
                     print('OK')
+                    if update:
+                        if ((oldfi.mtime != newfi.mtime) or
+                            (oldfi.mode  != newfi.mode)):
+                            oldfi.mtime = newfi.mtime
+                            oldfi.mode  = newfi.mode
+                            dbadd[filepath] = oldfi
         except (KeyboardInterrupt,SystemExit):
             break
         except Exception as e:
