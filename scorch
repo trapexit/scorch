@@ -162,6 +162,14 @@ optional arguments:
   -M, --maxdata=:          Max bytes to process before exiting (default: maxint)
   -b, --break-on-error:    Any error or hash failure will exit
   -h, --help:              Print this message
+
+exit codes:
+  * 0  : success, behavior executed, something found
+  * 1  : processing error
+  * 2  : error with command line arguments
+  * 4  : hash mismatch
+  * 8  : found
+  * 16 : not found, nothing processed
 '''
     print(help)
 
@@ -330,7 +338,8 @@ def different_sizes(oldfi,newfi):
 
 
 def add_hashes(opts,path,db,dbadd,dbremove):
-    rv = SUCCESS
+    rv  = ERROR_NOT_FOUND
+    err = SUCCESS;
     filepaths = get_files(path,opts.filter)
     opts.sort(filepaths)
 
@@ -352,22 +361,24 @@ def add_hashes(opts,path,db,dbadd,dbremove):
         try:
             fi.md5 = hash_file(filepath)
             dbadd[filepath] = fi
+            rv = SUCCESS
             if opts.verbose:
                 print(fi.md5)
         except (KeyboardInterrupt,SystemExit):
             break
         except Exception as e:
-            rv = rv | ERROR_PROCESSING
+            err = err | ERROR_PROCESSING
             if opts.verbose:
                 print('ERROR -',e)
             if opts.breakonerror:
                 break
 
-    return rv
+    return rv | err
 
 
 def append_hashes(opts,path,db,dbadd,dbremote):
-    rv = SUCCESS
+    rv  = ERROR_NOT_FOUND
+    err = SUCCESS
     filepaths = get_files(path,opts.filter,db)
     opts.sort(filepaths)
 
@@ -389,22 +400,24 @@ def append_hashes(opts,path,db,dbadd,dbremote):
         try:
             fi.md5 = hash_file(filepath)
             dbadd[filepath] = fi
+            rv = SUCCESS
             if opts.verbose:
                 print(fi.md5)
         except (KeyboardInterrupt,SystemExit):
             break
         except Exception as e:
-            rv = rv | ERROR_PROCESSING
+            err = err | ERROR_PROCESSING
             if opts.verbose:
                 print('ERROR -',e)
             if opts.breakonerror:
                 break
 
-    return rv
+    return rv | err
 
 
 def check_hashes(opts,path,db,dbadd,dbremove,update=False):
-    rv = SUCCESS
+    rv  = ERROR_NOT_FOUND
+    err = SUCCESS
     filepaths = filter_files(db.items(),opts.filter)
     opts.sort(filepaths)
 
@@ -427,8 +440,9 @@ def check_hashes(opts,path,db,dbadd,dbremove,update=False):
                 print('MISSING')
                 continue
 
+            rv = SUCCESS
             if different_sizes(oldfi,newfi):
-                rv = rv | ERROR_HASH_MISMATCH
+                err = err | ERROR_HASH_MISMATCH
                 print_filepath(filepath,actions,total,processed,opts.quote)
                 old_size = humansize(oldfi.size)
                 new_size = humansize(newfi.size)
@@ -453,7 +467,7 @@ def check_hashes(opts,path,db,dbadd,dbremove,update=False):
                 oldhashval = oldfi.md5
                 newhashval = hash_file(filepath)
                 if newhashval != oldhashval:
-                    rv = rv | ERROR_HASH_MISMATCH
+                    err = err | ERROR_HASH_MISMATCH
                     if not opts.verbose:
                         print_filepath(filepath,actions,total,processed,opts.quote)
                     print('FAILED')
@@ -470,13 +484,13 @@ def check_hashes(opts,path,db,dbadd,dbremove,update=False):
         except (KeyboardInterrupt,SystemExit):
             break
         except Exception as e:
-            rv = rv | ERROR_PROCESSING
+            err = err | ERROR_PROCESSING
             print_filepath(filepath,actions,total,processed,opts.quote)
             print('ERROR -',e)
             if opts.breakonerror:
                 break
 
-    return rv
+    return rv | err
 
 
 def check_and_update_hashes(opts,path,db,dbadd,dbremove):
@@ -484,7 +498,8 @@ def check_and_update_hashes(opts,path,db,dbadd,dbremove):
 
 
 def delete_hashes(opts,path,db,dbadd,dbremove):
-    rv = SUCCESS
+    rv  = ERROR_NOT_FOUND
+    err = SUCCESS
     filepaths = filter_files(db.items(),opts.filter)
     opts.sort(filepaths)
 
@@ -500,6 +515,7 @@ def delete_hashes(opts,path,db,dbadd,dbremove):
         actions   += 1
         processed += fi.size
 
+        rv = SUCCESS
         dbremove.append(filepath)
         if opts.verbose == 1:
             print_filepath(filepath,quote=opts.quote,end='\n')
@@ -507,11 +523,12 @@ def delete_hashes(opts,path,db,dbadd,dbremove):
             print_filepath(filepath,actions,total,processed,opts.quote)
             print('REMOVED')
 
-    return rv
+    return rv | err
 
 
 def cleanup_hashes(opts,path,db,dbadd,dbremove):
-    rv = SUCCESS
+    rv  = ERROR_NOT_FOUND
+    err = SUCCESS
     filepaths = filter_files(db.items(),opts.filter,os.path.exists)
     opts.sort(filepaths)
 
@@ -527,16 +544,18 @@ def cleanup_hashes(opts,path,db,dbadd,dbremove):
         actions   += 1
         processed += fi.size
 
+        rv = SUCCESS
         dbremove.append(filepath)
         if opts.verbose:
             print_filepath(filepath,actions,total,processed,opts.quote)
             print('REMOVED')
 
-    return rv
+    return rv | err
 
 
 def list_hashes(opts,path,db,dbadd,dbremove):
-    rv = SUCCESS
+    rv  = ERROR_NOT_FOUND
+    err = SUCCESS
     filepaths = filter_files(db.items(),opts.filter)
     opts.sort(filepaths)
 
@@ -551,6 +570,7 @@ def list_hashes(opts,path,db,dbadd,dbremove):
         actions   += 1
         processed += fi.size
 
+        rv = SUCCESS
         if not opts.verbose:
             filepath = filepath[len(path)+1:]
             filepath = os.path.join('.',filepath)
@@ -559,11 +579,12 @@ def list_hashes(opts,path,db,dbadd,dbremove):
 
         print(fi.md5,filepath)
 
-    return rv
+    return rv | err
 
 
 def list_unhashed(opts,path,db,dbadd,dbremove):
-    rv = SUCCESS
+    rv  = ERROR_NOT_FOUND
+    err = SUCCESS
     filepaths = get_files(path,opts.filter,db)
     opts.sort(filepaths)
 
@@ -578,17 +599,19 @@ def list_unhashed(opts,path,db,dbadd,dbremove):
         actions   += 1
         processed += fi.size
 
+        rv = SUCCESS
         if not opts.verbose:
             filepath = filepath[len(path)+1:]
             filepath = os.path.join('.',filepath)
 
         print_filepath(filepath,quote=opts.quote,end='\n')
 
-    return rv
+    return rv | err
 
 
 def list_dups(opts,path,db,dbadd,dbremove):
-    rv = SUCCESS
+    rv  = ERROR_NOT_FOUND
+    err = SUCCESS
     hashdb = {}
     for (filepath,fi) in db.items():
         if opts.filter.filter(filepath,fi):
@@ -609,6 +632,7 @@ def list_dups(opts,path,db,dbadd,dbremove):
 
         actions += 1
 
+        rv = SUCCESS
         if opts.quote:
             filepaths = [shlex.quote(filepath) for filepath in filepaths]
         filepaths.sort()
@@ -617,11 +641,12 @@ def list_dups(opts,path,db,dbadd,dbremove):
         else:
             print(hashval,' '.join(filepaths))
 
-    return rv
+    return rv | err
 
 
 def list_solo(opts,path,db,dbadd,dbremove):
-    rv = SUCCESS
+    rv  = ERROR_NOT_FOUND
+    err = SUCCESS
     hashdb = {}
     for (filepath,fi) in db.items():
         if opts.filter.filter(filepath,fi):
@@ -639,17 +664,20 @@ def list_solo(opts,path,db,dbadd,dbremove):
 
         if actions >= opts.maxactions:
             return rv
+
         actions += 1
 
+        rv = SUCCESS
         if opts.quote:
             filepaths[0] = shlex.quote(filepaths[0])
         print(hashval,filepaths[0])
 
-    return rv
+    return rv | err
 
 
 def list_missing(opts,path,db,dbadd,dbremove):
-    rv = SUCCESS
+    rv  = ERROR_NOT_FOUND
+    err = SUCCESS
     filepaths = get_files(path,opts.filter)
     filepaths = dict(filepaths)
 
@@ -671,6 +699,7 @@ def list_missing(opts,path,db,dbadd,dbremove):
         actions   += 1
         processed += fi.size
 
+        rv = SUCCESS
         output.append((filepath,fi))
 
     opts.sort(output)
@@ -680,7 +709,7 @@ def list_missing(opts,path,db,dbadd,dbremove):
                 filepath = shlex.quote(filepath)
             print(filepath)
 
-    return rv
+    return rv | err
 
 
 def in_db(opts,path,db,dbadd,dbremove):
@@ -710,14 +739,15 @@ def in_db(opts,path,db,dbadd,dbremove):
 
             print_filepath(filepath,actions,total,processed,opts.quote)
             if fi.size not in sizedb:
-                rv = rv | ERROR_HASH_MISMATCH
+                rv = rv | ERROR_NOT_FOUND | ERROR_HASH_MISMATCH
                 print("NO")
             else:
                 hashval = hash_file(filepath)
                 if hashval not in hashdb:
-                    rv = rv | ERROR_HASH_MISMATCH
+                    rv = rv | ERROR_NOT_FOUND | ERROR_HASH_MISMATCH
                     print("NO")
                 else:
+                    rv = rv | ERROR_FOUND
                     print("YES")
         except (KeyboardInterrupt,SystemExit):
             break
@@ -762,6 +792,7 @@ def found_in_db(opts,path,db,dbadd,dbremove):
                 rv = rv | ERROR_NOT_FOUND
                 continue
 
+            rv = rv | ERROR_FOUND
             if opts.verbose in [1,2]:
                 if opts.verbose == 1:
                     filepath = os.path.join('.',filepath[len(path)+1:])
@@ -812,6 +843,8 @@ def notfound_in_db(opts,path,db,dbadd,dbremove):
                     hashval = hash_file(filepath)
                     if hashval in hashes:
                         rv = rv | ERROR_FOUND
+                    else:
+                        rv = rv | ERROR_NOT_FOUND
             elif opts.verbose in [1,2]:
                 printpath = filepath
                 if opts.verbose == 1:
@@ -821,10 +854,12 @@ def notfound_in_db(opts,path,db,dbadd,dbremove):
 
                 if fi.size not in sizes:
                     print(printpath)
+                    rv = rv | ERROR_NOT_FOUND
                 else:
                     hashval = hash_file(filepath)
                     if hashval not in hashes:
                         print(printpath)
+                        rv = rv | ERROR_NOT_FOUND
                     else:
                         rv = rv | ERROR_FOUND
             elif opts.verbose in [3,4]:
@@ -837,6 +872,7 @@ def notfound_in_db(opts,path,db,dbadd,dbremove):
                 hashval = hash_file(filepath)
                 if hashval not in hashes:
                     print(hashval,printpath)
+                    rv = rv | ERROR_NOT_FOUND
                 else:
                     rv = rv | ERROR_FOUND
         except (KeyboardInterrupt,SystemExit):
