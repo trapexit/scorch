@@ -20,7 +20,7 @@ positional arguments:
                            * list-missing: list files no longer on filesystem
                            * list-solo: list files w/ no dup hashes
                            * list-unhashed: list files not yet hashed
-                           * list: md5sum compatible listing
+                           * list: sha256sum compatible listing
                            * in-db: show if hashed files exist in DB
                            * found-in-db: print files found in DB
                            * notfound-in-db: print files not found in DB
@@ -57,7 +57,7 @@ optional arguments:
 The file is simply CSV compressed with gzip.
 
 ```
-$ # file, md5sum, size, mode, mtime
+$ # file, sha256sum, size, mode, mtime
 $ zcat /var/tmp/scorch/scorch.db
 /tmp/files/a,d41d8cd98f00b204e9800998ecf8427e,0,33188,1546377833.3844686
 ```
@@ -119,7 +119,7 @@ $ scorch -v -d /tmp/hash.db check+update /tmp/files
  - hash: d41d8cd98f00b204e9800998ecf8427e -> d3b07384d113edec49eaa6238ad5ff00
 4/4 /tmp/files/d: OK
 
-$ scorch -v -d /tmp/hash.db list /tmp/files | md5sum -c
+$ scorch -v -d /tmp/hash.db list /tmp/files | sha256sum -c
 /tmp/files/c: OK
 /tmp/files/d: OK
 /tmp/files/a: OK
