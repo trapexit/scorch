@@ -34,7 +34,7 @@ import time
 from itertools import takewhile
 
 
-DEFAULT_DB     = 'scorch'
+DEFAULT_DB = 'scorch'
 DEFAULT_DBPATH = '/var/tmp/scorch'
 SUCCESS = 0
 ERROR_PROCESSING = 1
@@ -45,48 +45,47 @@ ERROR_NOT_FOUND = 16
 
 
 class Options(object):
-    verbose      = 0
-    quote        = 0
-    sort         = None
-    filter       = None
-    maxactions   = sys.maxsize
-    maxdata      = sys.maxsize
+    verbose = 0
+    quote = 0
+    sort = None
+    filter = None
+    maxactions = sys.maxsize
+    maxdata = sys.maxsize
     breakonerror = False
 
 
 class FileInfo(object):
-    md5   = ''
-    size  = 0
-    mode  = 0
+    sha256 = ''
+    size = 0
+    mode = 0
     mtime = 0
 
-    def __init__(self,size,mode,mtime):
-        self.size  = size
-        self.mode  = mode
+    def __init__(self, size, mode, mtime):
+        self.size = size
+        self.mode = mode
         self.mtime = mtime
 
-    def __init__(self,md5,size,mode,mtime):
-        self.md5   = md5
-        self.size  = size
-        self.mode  = mode
+    def __init__(self, sha256, size, mode, mtime):
+        self.sha256 = sha256
+        self.size = size
+        self.mode = mode
         self.mtime = mtime
 
     def __str__(self):
-        return str({'md5': self.md5,
+        return str({'sha256': self.sha256,
                     'size': self.size,
                     'mode': self.mode,
                     'mtime': self.mtime})
 
 
 class FileFilter(object):
-    def __init__(self,basepath,fnfilter,fifilter):
+    def __init__(self, basepath, fnfilter, fifilter):
         self.basepath = basepath
         self.fnfilter = fnfilter
         self.fifilter = fifilter
 
-
-    def filter(self,filepath,fi,other=(lambda f: False)):
-        common = commonprefix([self.basepath,filepath])
+    def filter(self, filepath, fi, other=(lambda f: False)):
+        common = commonprefix([self.basepath, filepath])
         if common != self.basepath:
             return True
         if self.fnfilter(filepath):
@@ -99,7 +98,7 @@ class FileFilter(object):
 
 
 def allnamesequal(name):
-    return all(n==name[0] for n in name[1:])
+    return all(n == name[0] for n in name[1:])
 
 
 def commonprefix(paths, sep='/'):
@@ -110,14 +109,14 @@ def commonprefix(paths, sep='/'):
 def regex_type(pat):
     try:
         re.compile(pat)
-    except:
+    except Exception:
         raise argparse.ArgumentTypeError
     return pat
 
 
 def print_help():
     help = \
-'''
+        '''
 usage: scorch [<options>] <instruction> [<directory>]
 
 scorch (Silent CORruption CHecker) is a tool to catalog files and hashes
@@ -134,7 +133,7 @@ positional arguments:
                            * list-missing: list files no longer on filesystem
                            * list-solo: list files w/ no dup hashes
                            * list-unhashed: list files not yet hashed
-                           * list: md5sum compatible listing
+                           * list: sha256sum compatible listing
                            * in-db: show if hashed files exist in DB
                            * found-in-db: print files found in DB
                            * notfound-in-db: print files not found in DB
@@ -176,47 +175,47 @@ exit codes:
 
 def build_arg_parser():
     parser = argparse.ArgumentParser(add_help=False)
-    parser.add_argument('-d','--db',
+    parser.add_argument('-d', '--db',
                         type=str,
                         default=DEFAULT_DB)
     parser.add_argument('inst',
-                        choices=['add','append','check',
-                                 'check+update','delete',
-                                 'cleanup','list',
-                                 'list-unhashed','list-dups',
-                                 'list-solo','list-missing',
+                        choices=['add', 'append', 'check',
+                                 'check+update', 'delete',
+                                 'cleanup', 'list',
+                                 'list-unhashed', 'list-dups',
+                                 'list-solo', 'list-missing',
                                  'in-db',
-                                 'found-in-db','notfound-in-db'],
+                                 'found-in-db', 'notfound-in-db'],
                         nargs='?')
     parser.add_argument('dir',
                         type=str,
                         nargs='*')
-    parser.add_argument('-v','--verbose',
+    parser.add_argument('-v', '--verbose',
                         action='count',
                         default=0)
-    parser.add_argument('-q','--quote',
+    parser.add_argument('-q', '--quote',
                         action='store_true',
                         default=False)
-    parser.add_argument('-r','--restrict',
+    parser.add_argument('-r', '--restrict',
                         choices=['sticky',
                                  'readonly'])
-    parser.add_argument('-f','--fnfilter',
+    parser.add_argument('-f', '--fnfilter',
                         type=regex_type)
-    parser.add_argument('-s','--sort',
-                        choices=['none','radix','reverse-radix',
-                                 'natural','reverse-natural','random',
-                                 'time','reverse-time'],
+    parser.add_argument('-s', '--sort',
+                        choices=['none', 'radix', 'reverse-radix',
+                                 'natural', 'reverse-natural', 'random',
+                                 'time', 'reverse-time'],
                         default='natural')
-    parser.add_argument('-m','--maxactions',
+    parser.add_argument('-m', '--maxactions',
                         type=int,
                         default=sys.maxsize)
-    parser.add_argument('-M','--maxdata',
+    parser.add_argument('-M', '--maxdata',
                         type=str,
                         default=str(sys.maxsize))
-    parser.add_argument('-b','--break-on-error',
+    parser.add_argument('-b', '--break-on-error',
                         action='store_true',
                         default=False)
-    parser.add_argument('-h','--help',
+    parser.add_argument('-h', '--help',
                         action='store_true',
                         default=False)
 
@@ -225,9 +224,9 @@ def build_arg_parser():
 
 def hash_file(filepath, hasher=None, blocksize=65536):
     if not hasher:
-        hasher = hashlib.md5()
+        hasher = hashlib.sha256()
 
-    with open(filepath,'rb') as afile:
+    with open(filepath, 'rb') as afile:
         buf = afile.read(blocksize)
         while buf:
             hasher.update(buf)
@@ -236,17 +235,17 @@ def hash_file(filepath, hasher=None, blocksize=65536):
     return hasher.hexdigest()
 
 
-def get_files(basepath,filefilter,db={}):
+def get_files(basepath, filefilter, db={}):
     if os.path.isfile(basepath):
         fi = get_fileinfo(basepath)
         if not fi:
             return []
-        return [(basepath,fi)]
+        return [(basepath, fi)]
 
     files = []
-    for (dirname,dirnames,filenames) in os.walk(basepath):
+    for (dirname, dirnames, filenames) in os.walk(basepath):
         for filename in filenames:
-            filepath = os.path.join(dirname,filename)
+            filepath = os.path.join(dirname, filename)
             if filepath in db:
                 continue
 
@@ -254,23 +253,23 @@ def get_files(basepath,filefilter,db={}):
             if not fi:
                 continue
 
-            if filefilter.filter(filepath,fi):
+            if filefilter.filter(filepath, fi):
                 continue
 
-            files.append((filepath,fi))
+            files.append((filepath, fi))
 
     return files
 
 
-def filter_files(files,filefilter,other=(lambda f: False)):
+def filter_files(files, filefilter, other=(lambda f: False)):
     if filefilter.basepath in files:
         return files
 
     rv = []
-    for (filepath,fi) in files:
-        if filefilter.filter(filepath,fi,other):
+    for (filepath, fi) in files:
+        if filefilter.filter(filepath, fi, other):
             continue
-        rv.append((filepath,fi))
+        rv.append((filepath, fi))
 
     return rv
 
@@ -280,15 +279,15 @@ def get_fileinfo(filepath):
         st = os.lstat(filepath)
         if not stat.S_ISREG(st.st_mode):
             return None
-        return FileInfo(md5='',
+        return FileInfo(sha256='',
                         size=st.st_size,
                         mode=st.st_mode,
                         mtime=st.st_mtime)
-    except:
+    except Exception:
         return None
 
 
-def print_filepath(filepath,count=0,total=0,data=0,quote=False,end=''):
+def print_filepath(filepath, count=0, total=0, data=0, quote=False, end=''):
     if quote:
         filepath = shlex.quote(filepath)
 
@@ -296,21 +295,21 @@ def print_filepath(filepath,count=0,total=0,data=0,quote=False,end=''):
     if count or total:
         padding = len(str(total))
         padded = str(count).zfill(padding)
-        s = '{0}/{1}'.format(padded,total)
+        s = '{0}/{1}'.format(padded, total)
 
     if data:
         s += ' {} '.format(humansize(data))
 
     s += filepath + ': '
 
-    print(s,end=end)
+    print(s, end=end)
 
     sys.stdout.flush()
 
 
 def human_to_bytes(s):
     m = s[-1]
-    if   m == 'K':
+    if m == 'K':
         i = int(s[0:-1]) * 1024
     elif m == 'M':
         i = int(s[0:-1]) * 1024 * 1024
@@ -325,125 +324,125 @@ def human_to_bytes(s):
 
 
 def humansize(nbytes):
-    suffixes = ['B','KB','MB','GB','TB','PB','ZB']
-    rank = int(math.log(nbytes,1024)) if nbytes else 0
+    suffixes = ['B', 'KB', 'MB', 'GB', 'TB', 'PB', 'ZB']
+    rank = int(math.log(nbytes, 1024)) if nbytes else 0
     rank = min(rank, len(suffixes) - 1)
     human = nbytes / (1024.0 ** rank)
     f = ('%.2f' % human)
     return '%s%s' % (f, suffixes[rank])
 
 
-def different_sizes(oldfi,newfi):
+def different_sizes(oldfi, newfi):
     return (oldfi.size != newfi.size)
 
 
-def add_hashes(opts,path,db,dbadd,dbremove):
-    rv  = ERROR_NOT_FOUND
-    err = SUCCESS;
-    filepaths = get_files(path,opts.filter)
+def add_hashes(opts, path, db, dbadd, dbremove):
+    rv = ERROR_NOT_FOUND
+    err = SUCCESS
+    filepaths = get_files(path, opts.filter)
     opts.sort(filepaths)
 
     actions = 0
     processed = 0
-    total = min(opts.maxactions,len(filepaths))
-    for (filepath,fi) in filepaths:
+    total = min(opts.maxactions, len(filepaths))
+    for (filepath, fi) in filepaths:
         if actions >= opts.maxactions:
             break
         if processed >= opts.maxdata:
             break
 
-        actions   += 1
+        actions += 1
         processed += fi.size
 
         if opts.verbose:
-            print_filepath(filepath,actions,total,processed,opts.quote)
+            print_filepath(filepath, actions, total, processed, opts.quote)
 
         try:
-            fi.md5 = hash_file(filepath)
+            fi.sha256 = hash_file(filepath)
             dbadd[filepath] = fi
             rv = SUCCESS
             if opts.verbose:
-                print(fi.md5)
-        except (KeyboardInterrupt,SystemExit):
+                print(fi.sha256)
+        except (KeyboardInterrupt, SystemExit):
             break
         except Exception as e:
             err = err | ERROR_PROCESSING
             if opts.verbose:
-                print('ERROR -',e)
+                print('ERROR -', e)
             if opts.breakonerror:
                 break
 
     return rv | err
 
 
-def append_hashes(opts,path,db,dbadd,dbremote):
-    rv  = ERROR_NOT_FOUND
+def append_hashes(opts, path, db, dbadd, dbremote):
+    rv = ERROR_NOT_FOUND
     err = SUCCESS
-    filepaths = get_files(path,opts.filter,db)
+    filepaths = get_files(path, opts.filter, db)
     opts.sort(filepaths)
 
     actions = 0
     processed = 0
-    total = min(opts.maxactions,len(filepaths))
-    for (filepath,fi) in filepaths:
+    total = min(opts.maxactions, len(filepaths))
+    for (filepath, fi) in filepaths:
         if actions >= opts.maxactions:
             break
         if processed >= opts.maxdata:
             break
 
-        actions   += 1
+        actions += 1
         processed += fi.size
 
         if opts.verbose:
-            print_filepath(filepath,actions,total,processed,opts.quote)
+            print_filepath(filepath, actions, total, processed, opts.quote)
 
         try:
-            fi.md5 = hash_file(filepath)
+            fi.sha256 = hash_file(filepath)
             dbadd[filepath] = fi
             rv = SUCCESS
             if opts.verbose:
-                print(fi.md5)
-        except (KeyboardInterrupt,SystemExit):
+                print(fi.sha256)
+        except (KeyboardInterrupt, SystemExit):
             break
         except Exception as e:
             err = err | ERROR_PROCESSING
             if opts.verbose:
-                print('ERROR -',e)
+                print('ERROR -', e)
             if opts.breakonerror:
                 break
 
     return rv | err
 
 
-def check_hashes(opts,path,db,dbadd,dbremove,update=False):
-    rv  = ERROR_NOT_FOUND
+def check_hashes(opts, path, db, dbadd, dbremove, update=False):
+    rv = ERROR_NOT_FOUND
     err = SUCCESS
-    filepaths = filter_files(db.items(),opts.filter)
+    filepaths = filter_files(db.items(), opts.filter)
     opts.sort(filepaths)
 
     actions = 0
     processed = 0
-    total = min(opts.maxactions,len(filepaths))
-    for (filepath,oldfi) in filepaths:
+    total = min(opts.maxactions, len(filepaths))
+    for (filepath, oldfi) in filepaths:
         if actions >= opts.maxactions:
             break
         if processed >= opts.maxdata:
             break
 
-        actions   += 1
+        actions += 1
         processed += oldfi.size
 
         try:
             newfi = get_fileinfo(filepath)
             if not newfi:
-                print_filepath(filepath,actions,total,processed,opts.quote)
+                print_filepath(filepath, actions, total, processed, opts.quote)
                 print('MISSING')
                 continue
 
             rv = SUCCESS
-            if different_sizes(oldfi,newfi):
+            if different_sizes(oldfi, newfi):
                 err = err | ERROR_HASH_MISMATCH
-                print_filepath(filepath,actions,total,processed,opts.quote)
+                print_filepath(filepath, actions, total, processed, opts.quote)
                 old_size = humansize(oldfi.size)
                 new_size = humansize(newfi.size)
                 old_time = time.ctime(oldfi.mtime)
@@ -453,23 +452,23 @@ def check_hashes(opts,path,db,dbadd,dbremove,update=False):
                 print('FILE CHANGED\n'
                       ' - size: {} -> {}\n'
                       ' - mtime: {} -> {}\n'
-                      ' - mode: {} -> {}'.format(old_size,new_size,
-                                                 old_time,new_time,
-                                                 old_mode,new_mode))
+                      ' - mode: {} -> {}'.format(old_size, new_size,
+                                                 old_time, new_time,
+                                                 old_mode, new_mode))
                 if update:
-                    newfi.md5 = hash_file(filepath)
+                    newfi.sha256 = hash_file(filepath)
                     dbadd[filepath] = newfi
-                    print(' - hash: {} -> {}'.format(oldfi.md5,newfi.md5))
+                    print(' - hash: {} -> {}'.format(oldfi.sha256, newfi.sha256))
             else:
                 if opts.verbose:
-                    print_filepath(filepath,actions,total,processed,opts.quote)
+                    print_filepath(filepath, actions, total, processed, opts.quote)
 
-                oldhashval = oldfi.md5
+                oldhashval = oldfi.sha256
                 newhashval = hash_file(filepath)
                 if newhashval != oldhashval:
                     err = err | ERROR_HASH_MISMATCH
                     if not opts.verbose:
-                        print_filepath(filepath,actions,total,processed,opts.quote)
+                        print_filepath(filepath, actions, total, processed, opts.quote)
                     print('FAILED')
                     if opts.breakonerror:
                         break
@@ -477,153 +476,153 @@ def check_hashes(opts,path,db,dbadd,dbremove,update=False):
                     print('OK')
                     if update:
                         if ((oldfi.mtime != newfi.mtime) or
-                            (oldfi.mode  != newfi.mode)):
+                                (oldfi.mode != newfi.mode)):
                             oldfi.mtime = newfi.mtime
-                            oldfi.mode  = newfi.mode
+                            oldfi.mode = newfi.mode
                             dbadd[filepath] = oldfi
-        except (KeyboardInterrupt,SystemExit):
+        except (KeyboardInterrupt, SystemExit):
             break
         except Exception as e:
             err = err | ERROR_PROCESSING
-            print_filepath(filepath,actions,total,processed,opts.quote)
-            print('ERROR -',e)
+            print_filepath(filepath, actions, total, processed, opts.quote)
+            print('ERROR -', e)
             if opts.breakonerror:
                 break
 
     return rv | err
 
 
-def check_and_update_hashes(opts,path,db,dbadd,dbremove):
-    return check_hashes(opts,path,db,dbadd,dbremove,update=True)
+def check_and_update_hashes(opts, path, db, dbadd, dbremove):
+    return check_hashes(opts, path, db, dbadd, dbremove, update=True)
 
 
-def delete_hashes(opts,path,db,dbadd,dbremove):
-    rv  = ERROR_NOT_FOUND
+def delete_hashes(opts, path, db, dbadd, dbremove):
+    rv = ERROR_NOT_FOUND
     err = SUCCESS
-    filepaths = filter_files(db.items(),opts.filter)
+    filepaths = filter_files(db.items(), opts.filter)
     opts.sort(filepaths)
 
     actions = 0
     processed = 0
-    total = min(opts.maxactions,len(filepaths))
-    for (filepath,fi) in filepaths:
+    total = min(opts.maxactions, len(filepaths))
+    for (filepath, fi) in filepaths:
         if actions >= opts.maxactions:
             break
         if processed >= opts.maxdata:
             break
 
-        actions   += 1
+        actions += 1
         processed += fi.size
 
         rv = SUCCESS
         dbremove.append(filepath)
         if opts.verbose == 1:
-            print_filepath(filepath,quote=opts.quote,end='\n')
+            print_filepath(filepath, quote=opts.quote, end='\n')
         elif opts.verbose == 2:
-            print_filepath(filepath,actions,total,processed,opts.quote)
+            print_filepath(filepath, actions, total, processed, opts.quote)
             print('REMOVED')
 
     return rv | err
 
 
-def cleanup_hashes(opts,path,db,dbadd,dbremove):
-    rv  = ERROR_NOT_FOUND
+def cleanup_hashes(opts, path, db, dbadd, dbremove):
+    rv = ERROR_NOT_FOUND
     err = SUCCESS
-    filepaths = filter_files(db.items(),opts.filter,os.path.exists)
+    filepaths = filter_files(db.items(), opts.filter, os.path.exists)
     opts.sort(filepaths)
 
     actions = 0
     processed = 0
-    total = min(opts.maxactions,len(filepaths))
-    for (filepath,fi) in filepaths:
+    total = min(opts.maxactions, len(filepaths))
+    for (filepath, fi) in filepaths:
         if actions >= opts.maxactions:
             break
         if processed >= opts.maxdata:
             break
 
-        actions   += 1
+        actions += 1
         processed += fi.size
 
         rv = SUCCESS
         dbremove.append(filepath)
         if opts.verbose:
-            print_filepath(filepath,actions,total,processed,opts.quote)
+            print_filepath(filepath, actions, total, processed, opts.quote)
             print('REMOVED')
 
     return rv | err
 
 
-def list_hashes(opts,path,db,dbadd,dbremove):
-    rv  = ERROR_NOT_FOUND
+def list_hashes(opts, path, db, dbadd, dbremove):
+    rv = ERROR_NOT_FOUND
     err = SUCCESS
-    filepaths = filter_files(db.items(),opts.filter)
+    filepaths = filter_files(db.items(), opts.filter)
     opts.sort(filepaths)
 
     actions = 0
     processed = 0
-    for (filepath,fi) in filepaths:
+    for (filepath, fi) in filepaths:
         if actions >= opts.maxactions:
             break
         if processed >= opts.maxdata:
             break
 
-        actions   += 1
+        actions += 1
         processed += fi.size
 
         rv = SUCCESS
         if not opts.verbose:
-            filepath = filepath[len(path)+1:]
-            filepath = os.path.join('.',filepath)
+            filepath = filepath[len(path) + 1:]
+            filepath = os.path.join('.', filepath)
         if opts.quote:
             filepath = shlex.quote(filepath)
 
-        print(fi.md5,filepath)
+        print(fi.sha256, filepath)
 
     return rv | err
 
 
-def list_unhashed(opts,path,db,dbadd,dbremove):
-    rv  = ERROR_NOT_FOUND
+def list_unhashed(opts, path, db, dbadd, dbremove):
+    rv = ERROR_NOT_FOUND
     err = SUCCESS
-    filepaths = get_files(path,opts.filter,db)
+    filepaths = get_files(path, opts.filter, db)
     opts.sort(filepaths)
 
     actions = 0
     processed = 0
-    for (filepath,fi) in filepaths:
+    for (filepath, fi) in filepaths:
         if actions >= opts.maxactions:
             break
         if processed >= opts.maxdata:
             break
 
-        actions   += 1
+        actions += 1
         processed += fi.size
 
         rv = SUCCESS
         if not opts.verbose:
-            filepath = filepath[len(path)+1:]
-            filepath = os.path.join('.',filepath)
+            filepath = filepath[len(path) + 1:]
+            filepath = os.path.join('.', filepath)
 
-        print_filepath(filepath,quote=opts.quote,end='\n')
+        print_filepath(filepath, quote=opts.quote, end='\n')
 
     return rv | err
 
 
-def list_dups(opts,path,db,dbadd,dbremove):
-    rv  = ERROR_NOT_FOUND
+def list_dups(opts, path, db, dbadd, dbremove):
+    rv = ERROR_NOT_FOUND
     err = SUCCESS
     hashdb = {}
-    for (filepath,fi) in db.items():
-        if opts.filter.filter(filepath,fi):
+    for (filepath, fi) in db.items():
+        if opts.filter.filter(filepath, fi):
             continue
 
-        if not fi.md5 in hashdb:
-            hashdb[fi.md5] = []
+        if fi.sha256 not in hashdb:
+            hashdb[fi.sha256] = []
 
-        hashdb[fi.md5].append(filepath)
+        hashdb[fi.sha256].append(filepath)
 
     actions = 0
-    for (hashval,filepaths) in hashdb.items():
+    for (hashval, filepaths) in hashdb.items():
         if len(filepaths) <= 1:
             continue
 
@@ -637,28 +636,28 @@ def list_dups(opts,path,db,dbadd,dbremove):
             filepaths = [shlex.quote(filepath) for filepath in filepaths]
         filepaths.sort()
         if opts.verbose:
-            print(hashval,'\n -','\n - '.join(filepaths))
+            print(hashval, '\n -', '\n - '.join(filepaths))
         else:
-            print(hashval,' '.join(filepaths))
+            print(hashval, ' '.join(filepaths))
 
     return rv | err
 
 
-def list_solo(opts,path,db,dbadd,dbremove):
-    rv  = ERROR_NOT_FOUND
+def list_solo(opts, path, db, dbadd, dbremove):
+    rv = ERROR_NOT_FOUND
     err = SUCCESS
     hashdb = {}
-    for (filepath,fi) in db.items():
-        if opts.filter.filter(filepath,fi):
+    for (filepath, fi) in db.items():
+        if opts.filter.filter(filepath, fi):
             continue
 
-        if not fi.md5 in hashdb:
-            hashdb[fi.md5] = []
+        if fi.sha256 not in hashdb:
+            hashdb[fi.sha256] = []
 
-        hashdb[fi.md5].append(filepath)
+        hashdb[fi.sha256].append(filepath)
 
     actions = 0
-    for (hashval,filepaths) in hashdb.items():
+    for (hashval, filepaths) in hashdb.items():
         if len(filepaths) > 1:
             continue
 
@@ -670,22 +669,22 @@ def list_solo(opts,path,db,dbadd,dbremove):
         rv = SUCCESS
         if opts.quote:
             filepaths[0] = shlex.quote(filepaths[0])
-        print(hashval,filepaths[0])
+        print(hashval, filepaths[0])
 
     return rv | err
 
 
-def list_missing(opts,path,db,dbadd,dbremove):
-    rv  = ERROR_NOT_FOUND
+def list_missing(opts, path, db, dbadd, dbremove):
+    rv = ERROR_NOT_FOUND
     err = SUCCESS
-    filepaths = get_files(path,opts.filter)
+    filepaths = get_files(path, opts.filter)
     filepaths = dict(filepaths)
 
     actions = 0
     processed = 0
-    output  = []
-    for (filepath,fi) in db.items():
-        if commonprefix([path,filepath]) != path:
+    output = []
+    for (filepath, fi) in db.items():
+        if commonprefix([path, filepath]) != path:
             continue
 
         if filepath in filepaths:
@@ -696,14 +695,14 @@ def list_missing(opts,path,db,dbadd,dbremove):
         if processed >= opts.maxdata:
             break
 
-        actions   += 1
+        actions += 1
         processed += fi.size
 
         rv = SUCCESS
-        output.append((filepath,fi))
+        output.append((filepath, fi))
 
     opts.sort(output)
-    for (filepath,fi) in output:
+    for (filepath, fi) in output:
         if opts.verbose:
             if opts.quote:
                 filepath = shlex.quote(filepath)
@@ -712,32 +711,32 @@ def list_missing(opts,path,db,dbadd,dbremove):
     return rv | err
 
 
-def in_db(opts,path,db,dbadd,dbremove):
+def in_db(opts, path, db, dbadd, dbremove):
     rv = SUCCESS
     sizedb = set()
     hashdb = {}
-    for (filepath,fi) in db.items():
-        if not fi.md5 in hashdb:
-            hashdb[fi.md5] = []
+    for (filepath, fi) in db.items():
+        if fi.sha256 not in hashdb:
+            hashdb[fi.sha256] = []
 
-        hashdb[fi.md5].append(filepath)
+        hashdb[fi.sha256].append(filepath)
         sizedb.add(fi.size)
 
     actions = 0
     processed = 0
-    filepaths = get_files(path,opts.filter)
-    total = min(opts.maxactions,len(filepaths))
-    for (filepath,fi) in filepaths:
+    filepaths = get_files(path, opts.filter)
+    total = min(opts.maxactions, len(filepaths))
+    for (filepath, fi) in filepaths:
         try:
             if actions >= opts.maxactions:
                 break
             if processed >= opts.maxdata:
                 break
 
-            actions   += 1
+            actions += 1
             processed += fi.size
 
-            print_filepath(filepath,actions,total,processed,opts.quote)
+            print_filepath(filepath, actions, total, processed, opts.quote)
             if fi.size not in sizedb:
                 rv = rv | ERROR_NOT_FOUND | ERROR_HASH_MISMATCH
                 print("NO")
@@ -749,38 +748,38 @@ def in_db(opts,path,db,dbadd,dbremove):
                 else:
                     rv = rv | ERROR_FOUND
                     print("YES")
-        except (KeyboardInterrupt,SystemExit):
+        except (KeyboardInterrupt, SystemExit):
             break
         except Exception as e:
             rv = rv | ERROR_PROCESSING
-            print('ERROR -',e)
+            print('ERROR -', e)
 
     return rv
 
 
-def found_in_db(opts,path,db,dbadd,dbremove):
+def found_in_db(opts, path, db, dbadd, dbremove):
     rv = SUCCESS
     sizedb = set()
     hashdb = {}
-    writer = csv.writer(sys.stdout,delimiter=',')
-    for (filepath,fi) in db.items():
-        if not fi.md5 in hashdb:
-            hashdb[fi.md5] = []
+    writer = csv.writer(sys.stdout, delimiter=',')
+    for (filepath, fi) in db.items():
+        if fi.sha256 not in hashdb:
+            hashdb[fi.sha256] = []
 
-        hashdb[fi.md5].append(filepath)
+        hashdb[fi.sha256].append(filepath)
         sizedb.add(fi.size)
 
     actions = 0
     processed = 0
-    filepaths = get_files(path,opts.filter)
-    for (filepath,fi) in filepaths:
+    filepaths = get_files(path, opts.filter)
+    for (filepath, fi) in filepaths:
         try:
             if actions >= opts.maxactions:
                 break
             if processed >= opts.maxdata:
                 break
 
-            actions   += 1
+            actions += 1
             processed += fi.size
 
             if fi.size not in sizedb:
@@ -793,49 +792,49 @@ def found_in_db(opts,path,db,dbadd,dbremove):
                 continue
 
             rv = rv | ERROR_FOUND
-            if opts.verbose in [1,2]:
+            if opts.verbose in [1, 2]:
                 if opts.verbose == 1:
-                    filepath = os.path.join('.',filepath[len(path)+1:])
+                    filepath = os.path.join('.', filepath[len(path) + 1:])
                 if opts.quote:
                     filepath = shlex.quote(filepath)
                 print(filepath)
-            elif opts.verbose in [3,4]:
+            elif opts.verbose in [3, 4]:
                 if opts.verbose == 3:
-                    filepath = os.path.join('.',filepath[len(path)+1:])
+                    filepath = os.path.join('.', filepath[len(path) + 1:])
                 if opts.quote:
                     filepath = shlex.quote(filepath)
-                print(hashval,filepath)
+                print(hashval, filepath)
             elif opts.verbose >= 5:
-                t = tuple([hashval,filepath] + hashdb[hashval])
+                t = tuple([hashval, filepath] + hashdb[hashval])
                 writer.writerow(t)
-        except (KeyboardInterrupt,SystemExit):
+        except (KeyboardInterrupt, SystemExit):
             break
         except Exception as e:
             rv = rv | ERROR_PROCESSING
-            print('ERROR -',e)
+            print('ERROR -', e)
 
     return rv
 
 
-def notfound_in_db(opts,path,db,dbadd,dbremove):
+def notfound_in_db(opts, path, db, dbadd, dbremove):
     rv = SUCCESS
     hashes = set()
-    sizes  = set()
-    for (filepath,fi) in db.items():
-        hashes.add(fi.md5)
+    sizes = set()
+    for (filepath, fi) in db.items():
+        hashes.add(fi.sha256)
         sizes.add(fi.size)
 
     actions = 0
     processed = 0
-    filepaths = get_files(path,opts.filter)
-    for (filepath,fi) in filepaths:
+    filepaths = get_files(path, opts.filter)
+    for (filepath, fi) in filepaths:
         try:
             if actions >= opts.maxactions:
                 break
             if processed >= opts.maxdata:
                 break
 
-            actions   += 1
+            actions += 1
             processed += fi.size
 
             if opts.verbose == 0:
@@ -845,10 +844,10 @@ def notfound_in_db(opts,path,db,dbadd,dbremove):
                         rv = rv | ERROR_FOUND
                     else:
                         rv = rv | ERROR_NOT_FOUND
-            elif opts.verbose in [1,2]:
+            elif opts.verbose in [1, 2]:
                 printpath = filepath
                 if opts.verbose == 1:
-                    printpath = os.path.join('.',filepath[len(path)+1:])
+                    printpath = os.path.join('.', filepath[len(path) + 1:])
                 if opts.quote:
                     printpath = shlex.quote(printpath)
 
@@ -862,24 +861,24 @@ def notfound_in_db(opts,path,db,dbadd,dbremove):
                         rv = rv | ERROR_NOT_FOUND
                     else:
                         rv = rv | ERROR_FOUND
-            elif opts.verbose in [3,4]:
+            elif opts.verbose in [3, 4]:
                 printpath = filepath
                 if opts.verbose == 3:
-                    printpath = os.path.join('.',filepath[len(path)+1:])
+                    printpath = os.path.join('.', filepath[len(path) + 1:])
                 if opts.quote:
                     printpath = shlex.quote(printpath)
 
                 hashval = hash_file(filepath)
                 if hashval not in hashes:
-                    print(hashval,printpath)
+                    print(hashval, printpath)
                     rv = rv | ERROR_NOT_FOUND
                 else:
                     rv = rv | ERROR_FOUND
-        except (KeyboardInterrupt,SystemExit):
+        except (KeyboardInterrupt, SystemExit):
             break
         except Exception as e:
             rv = rv | ERROR_PROCESSING
-            print('ERROR -',e)
+            print('ERROR -', e)
 
     return rv
 
@@ -903,7 +902,7 @@ def restrict_fun(rtype):
 def fnfilter_fun(regex):
     if regex:
         cregex = re.compile(regex)
-        return (lambda filepath: cregex.match(filepath) == None)
+        return (lambda filepath: cregex.match(filepath) is None)
     return (lambda filepath: False)
 
 
@@ -948,77 +947,89 @@ def sort_fun(sort):
         return (lambda l: random.shuffle(l))
     elif sort == 'natural':
         cre = re.compile('(\d+)')
-        sort_key = lambda s: [int(t) if t.isdigit() else t.lower()
-                              for t in re.split(cre,s[0])]
+
+        def sort_key(s):
+            return [
+                int(t) if t.isdigit() else t.lower() for t in re.split(
+                    cre, s[0]
+                )
+            ]
         return (lambda l: l.sort(key=sort_key))
     elif sort == 'reverse-natural':
         cre = re.compile('(\d+)')
-        sort_key = lambda s: [int(t) if t.isdigit() else t.lower()
-                              for t in re.split(cre,s[0])]
-        return (lambda l: l.sort(key=sort_key,reverse=True))
+
+        def sort_key(s):
+            return [
+                int(t) if t.isdigit() else t.lower() or t in re.split(
+                    cre, s[0]
+                )
+            ]
+        return (lambda l: l.sort(key=sort_key, reverse=True))
     elif sort == 'time':
-        sort_key = lambda s: s[1].mtime
+        def sort_key(s):
+            return s[1].mtime
         return (lambda l: l.sort(key=sort_key))
     elif sort == 'reverse-time':
-        sort_key = lambda s: s[1].mtime
-        return (lambda l: l.sort(key=sort_key,reverse=True))
+        def sort_key(s):
+            return s[1].mtime
+        return (lambda l: l.sort(key=sort_key, reverse=True))
     return (lambda l: None)
 
 
 def open_db(filepath):
     try:
-        f = gzip.open(filepath,'rt',encoding='utf-8',newline='')
+        f = gzip.open(filepath, 'rt', encoding='utf-8', newline='')
         f.read(10)
         f.seek(0)
         return f
     except Exception as e:
-        return open(filepath,'rt',encoding='utf-8',newline='')
+        return open(filepath, 'rt', encoding='utf-8', newline='')
 
 
 def read_db(filepath):
     db = {}
     try:
         with open_db(filepath) as f:
-            reader = csv.reader(f,delimiter=',',quotechar='"')
-            for (filename,md5,size,mode,mtime) in reader:
-                db[filename]=FileInfo(md5,
-                                      int(size),
-                                      int(mode),
-                                      float(mtime))
-    except (KeyboardInterrupt,SystemExit):
+            reader = csv.reader(f, delimiter=',', quotechar='"')
+            for (filename, sha256, size, mode, mtime) in reader:
+                db[filename] = FileInfo(sha256,
+                                        int(size),
+                                        int(mode),
+                                        float(mtime))
+    except (KeyboardInterrupt, SystemExit):
         raise
     except Exception as e:
-        print('Error reading hash DB:',e)
+        print('Error reading hash DB:', e)
     return db
 
 
-def write_db_core(filepath,db):
+def write_db_core(filepath, db):
     basepath = os.path.dirname(filepath)
-    os.makedirs(basepath,mode=0o775,exist_ok=True)
-    (fd,tmpfilepath) = tempfile.mkstemp(dir=basepath)
-    with gzip.open(tmpfilepath,'wt',encoding='utf-8',newline='') as f:
-        writer = csv.writer(f,delimiter=',')
-        for (k,v) in db.items():
-            row = (k,v.md5,v.size,v.mode,v.mtime)
+    os.makedirs(basepath, mode=0o775, exist_ok=True)
+    (fd, tmpfilepath) = tempfile.mkstemp(dir=basepath)
+    with gzip.open(tmpfilepath, 'wt', encoding='utf-8', newline='') as f:
+        writer = csv.writer(f, delimiter=',')
+        for (k, v) in db.items():
+            row = (k, v.sha256, v.size, v.mode, v.mtime)
             writer.writerow(row)
     os.close(fd)
-    os.replace(tmpfilepath,filepath)
+    os.replace(tmpfilepath, filepath)
 
 
-def write_db(filepath,dbadd,dbremove):
+def write_db(filepath, dbadd, dbremove):
     try:
         db = read_db(filepath)
 
-        for (k,v) in dbadd.items():
-            db[k] = v;
+        for (k, v) in dbadd.items():
+            db[k] = v
         for k in dbremove:
             del db[k]
 
-        write_db_core(filepath,db)
-    except (KeyboardInterrupt,SystemExit):
+        write_db_core(filepath, db)
+    except (KeyboardInterrupt, SystemExit):
         raise
     except Exception as e:
-        print('Error writing hash DB:',e)
+        print('Error writing hash DB:', e)
 
 
 def process_directories(dirs):
@@ -1036,12 +1047,12 @@ def process_dbpath(dbpath):
         pass
     elif '/' in dbpath:
         cwd = os.getcwd()
-        dbpath = os.path.join(cwd,dbpath)
+        dbpath = os.path.join(cwd, dbpath)
     else:
-        dbpath = os.path.join(DEFAULT_DBPATH,dbpath)
+        dbpath = os.path.join(DEFAULT_DBPATH, dbpath)
 
     if os.path.isdir(dbpath) or dbpath[-1] == '/':
-        dbpath = os.path.join(dbpath,'scorch.db')
+        dbpath = os.path.join(dbpath, 'scorch.db')
 
     if not os.path.splitext(dbpath)[1]:
         dbpath += '.db'
@@ -1053,7 +1064,7 @@ def process_dbpath(dbpath):
 
 def main():
     parser = build_arg_parser()
-    args   = parser.parse_args()
+    args = parser.parse_args()
 
     if args.help:
         print_help()
@@ -1063,24 +1074,24 @@ def main():
         parser.exit(status=ERROR_ARG)
 
     opts = Options()
-    opts.verbose      = args.verbose
-    opts.quote        = args.quote
-    opts.sort         = sort_fun(args.sort)
-    opts.maxactions   = args.maxactions
-    opts.maxdata      = human_to_bytes(args.maxdata)
+    opts.verbose = args.verbose
+    opts.quote = args.quote
+    opts.sort = sort_fun(args.sort)
+    opts.maxactions = args.maxactions
+    opts.maxdata = human_to_bytes(args.maxdata)
     opts.breakonerror = args.break_on_error
 
-    dbpath       = process_dbpath(args.db)
-    func         = inst_fun(args.inst)
-    fnfilter     = fnfilter_fun(args.fnfilter)
-    fifilter     = restrict_fun(args.restrict)
-    directories  = process_directories(args.dir)
+    dbpath = process_dbpath(args.db)
+    func = inst_fun(args.inst)
+    fnfilter = fnfilter_fun(args.fnfilter)
+    fifilter = restrict_fun(args.restrict)
+    directories = process_directories(args.dir)
 
     rv = SUCCESS
     try:
         for directory in directories:
-            db       = read_db(dbpath)
-            dbadd    = {}
+            db = read_db(dbpath)
+            dbadd = {}
             dbremove = []
 
             opts.filter = FileFilter(basepath=directory,
@@ -1088,16 +1099,16 @@ def main():
                                      fifilter=fifilter)
 
             try:
-                rv = rv | func(opts,directory,db,dbadd,dbremove)
-            except (KeyboardInterrupt,SystemExit):
+                rv = rv | func(opts, directory, db, dbadd, dbremove)
+            except (KeyboardInterrupt, SystemExit):
                 pass
 
             if len(dbadd) or len(dbremove):
-                write_db(dbpath,dbadd,dbremove)
+                write_db(dbpath, dbadd, dbremove)
 
             if opts.breakonerror and rv:
                 break
-    except (KeyboardInterrupt,SystemExit):
+    except (KeyboardInterrupt, SystemExit):
         pass
     except IOError as e:
         if e.errno != errno.EPIPE:
