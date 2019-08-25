@@ -3,6 +3,7 @@
 scorch is a tool to catalog files and their hashes to help in discovering file corruption, missing files, duplicate files, etc.
 
 ### Usage
+
 ```
 usage: scorch [<options>] <instruction> [<directory>]
 
@@ -12,6 +13,10 @@ to help in discovering file corruption, missing files, duplicates, etc.
 positional arguments:
   instruction:             * add: compute and store hashes for all found files
                            * append: compute and store for newly found files
+                           * backup: backs up selected database
+                           * restore: restore backed up database
+                           * list-backups: list database backups
+                           * diff-backup: show diff between current & backup DB
                            * check+update: check and update if new
                            * check: check stored hashes against files
                            * cleanup: remove hashes of missing files
@@ -48,6 +53,14 @@ optional arguments:
   -M, --maxdata=:          Max bytes to process before exiting (default: maxint)
   -b, --break-on-error:    Any error or hash failure will exit
   -h, --help:              Print this message
+
+exit codes:
+  * 0  : success, behavior executed, something found
+  * 1  : processing error
+  * 2  : error with command line arguments
+  * 4  : hash mismatch
+  * 8  : found
+  * 16 : not found, nothing processed
 ```
 
 ### Database
@@ -75,9 +88,29 @@ The `--db` argument is takes more than a path.
 
 If there is no extension then `.db` will be added.
 
+
 #### Upgrade
 
 If you're using an older version of scorch with the default database in `/var/tmp/scorch.db` just copy/move the file to `/var/tmp/scorch/scorch.db`. The old format was not compressed but scorch will handle reading it uncompressed and compressing it on write.
+
+
+#### Backup / Restore
+
+To simplify backing up the scorch database there is a backup command. Without a directory defined it will store the database to the same location as the database. If directories are added to the arguments then the database backup will be stored there.
+
+```
+$ scorch -v backup
+/var/tmp/scorch/scorch.db.backup_2019-07-29T02:35:46Z
+$ scorch -v backup /tmp
+/tmp/scorch.db.backup_2019-07-29T02:36:12Z
+$ scorch list-backups
+/var/tmp/scorch/scorch.db.backup_2019-07-29T02:35:46Z
+$ scorch list-backups /tmp
+/tmp/scorch.db.backup_2019-07-29T02:36:12Z
+/tmp/scorch.db.backup_2019-07-29T02:13:34Z
+$ scorch restore /tmp/scorch.db.backup_2019-07-29T02:36:12Z
+```
+
 
 ### Example
 
@@ -126,6 +159,7 @@ $ scorch -v -d /tmp/hash.db list /tmp/files | md5sum -c
 /tmp/files/b: OK
 ```
 
+
 ### Automation
 
 A typical setup would probably be initialized manually by using **add** or **append**. After it's finished creating the database a cron job can be created to check, update, append, and cleanup the database. By not placing **scorch** into verbose mode only differences or failures will be printed and the output from the job running will be emailed to the user (if setup to do so).
@@ -138,12 +172,17 @@ scorch append /tmp/files
 scorch cleanup /tmp/files
 ```
 
+
 # Support
 
 #### Contact / Issue submission
+
 * github.com: https://github.com/trapexit/scorch/issues
 * email: trapexit@spawn.link
 * twitter: https://twitter.com/_trapexit
+* reddit: https://www.reddit.com/user/trapexit
+* discord: https://discord.gg/MpAr69V
+
 
 #### Support development
 
