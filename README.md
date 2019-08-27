@@ -17,8 +17,9 @@ positional arguments:
                            * restore: restore backed up database
                            * list-backups: list database backups
                            * diff-backup: show diff between current & backup DB
+                           * hashes: print available hash functions
                            * check: check stored hashes against files
-                           * update: update changed files
+                           * update: update metadata of changed files
                            * check+update: check and update if new
                            * cleanup: remove hashes of missing files
                            * delete: remove hashes for found files
@@ -26,7 +27,7 @@ positional arguments:
                            * list-missing: list files no longer on filesystem
                            * list-solo: list files w/ no dup hashes
                            * list-unhashed: list files not yet hashed
-                           * list: md5sum compatible listing
+                           * list: md5sum'ish compatible listing
                            * in-db: show if hashed files exist in DB
                            * found-in-db: print files found in DB
                            * notfound-in-db: print files not found in DB
@@ -42,6 +43,7 @@ optional arguments:
   -r, --restrict=:         * sticky: restrict scan to files with sticky bit
                            * readonly: restrict scan to readonly files
   -f, --fnfilter=:         Restrict actions to files which match regex
+  -F, --negate-fnfilter    Negate the fnfilter regex match
   -s, --sort=:             Sorting routine on input & output (default: natural)
                            * random: shuffled / random
                            * natural: human-friendly sort, ascending
@@ -53,14 +55,23 @@ optional arguments:
   -m, --maxactions=:       Max actions to take before exiting (default: maxint)
   -M, --maxdata=:          Max bytes to process before exiting (default: maxint)
   -b, --break-on-error:    Any error or hash failure will exit
+  -D, --diff-fields=:      Fields to use to indicate a file has 'changed' and
+                           and should be rehashed. Combine with ','.
+                           (default: size)
+                           * size
+                           * inode
+                           * mtime
+                           * mode
+  -H, --hash=:             Hash algo. Use 'scorch hashes' get available algos.
+                           (default: md5)
   -h, --help:              Print this message
 
 exit codes:
-  * 0  : success, behavior executed, something found
-  * 1  : processing error
-  * 2  : error with command line arguments
-  * 4  : hash mismatch
-  * 8  : found
+  *  0 : success, behavior executed, something found
+  *  1 : processing error
+  *  2 : error with command line arguments
+  *  4 : hash mismatch
+  *  8 : found
   * 16 : not found, nothing processed
 ```
 
@@ -71,9 +82,9 @@ exit codes:
 The file is simply CSV compressed with gzip.
 
 ```
-$ # file, md5sum, size, mode, mtime
+$ # file, hash digest, size, mode, mtime, inode
 $ zcat /var/tmp/scorch/scorch.db
-/tmp/files/a,d41d8cd98f00b204e9800998ecf8427e,0,33188,1546377833.3844686
+/tmp/files/a,md5:d41d8cd98f00b204e9800998ecf8427e,0,33188,1546377833.3844686,123456
 ```
 
 #### --db argument
@@ -153,7 +164,7 @@ $ scorch -v -d /tmp/hash.db check+update /tmp/files
  - hash: d41d8cd98f00b204e9800998ecf8427e -> d3b07384d113edec49eaa6238ad5ff00
 4/4 /tmp/files/d: OK
 
-$ scorch -v -d /tmp/hash.db list /tmp/files | md5sum -c
+$ scorch -v -d /tmp/hash.db list /tmp/files | cut -d: -f2- | md5sum -c
 /tmp/files/c: OK
 /tmp/files/d: OK
 /tmp/files/a: OK
