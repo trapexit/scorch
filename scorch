@@ -2,7 +2,7 @@
 
 # ISC License (ISC)
 #
-# Copyright (c) 2016, Antonio SJ Musumeci <trapexit@spawn.link>
+# Copyright (c) 2019, Antonio SJ Musumeci <trapexit@spawn.link>
 #
 # Permission to use, copy, modify, and/or distribute this software for any
 # purpose with or without fee is hereby granted, provided that the above
@@ -31,9 +31,8 @@ import shutil
 import stat
 import sys
 import tempfile
-import time
 from collections import namedtuple
-from datetime import datetime
+from datetime import datetime as dt
 from itertools import takewhile
 
 
@@ -55,6 +54,7 @@ class Options(object):
     maxactions   = sys.maxsize
     maxdata      = sys.maxsize
     breakonerror = False
+    diff_fields  = []
 
 
 class FileInfo(object):
@@ -62,29 +62,34 @@ class FileInfo(object):
     size  = 0
     mode  = 0
     mtime = 0
+    inode = 0
 
-    def __init__(self,size,mode,mtime):
+    def __init__(self,size,mode,mtime,inode):
         self.size  = size
         self.mode  = mode
         self.mtime = mtime
+        self.inode = inode
 
-    def __init__(self,md5,size,mode,mtime):
+    def __init__(self,md5,size,mode,mtime,inode):
         self.md5   = md5
         self.size  = size
         self.mode  = mode
         self.mtime = mtime
+        self.inode = inode
 
     def __str__(self):
         return str({'md5': self.md5,
                     'size': self.size,
                     'mode': self.mode,
-                    'mtime': self.mtime})
+                    'mtime': self.mtime,
+                    'inode': self.inode})
 
     def __eq__(self, rhs):
-        return ((self.md5   == rhs.md5)  and
-                (self.size  == rhs.size) and
-                (self.mode  == rhs.mode) and
-                (self.mtime == rhs.mtime))
+        return ((self.md5   == rhs.md5)   and
+                (self.size  == rhs.size)  and
+                (self.mode  == rhs.mode)  and
+                (self.mtime == rhs.mtime) and
+                (self.inode == rhs.inode))
 
 
 class FileFilter(object):
@@ -139,8 +144,9 @@ positional arguments:
                            * restore: restore backed up database
                            * list-backups: list database backups
                            * diff-backup: show diff between current & backup DB
-                           * check+update: check and update if new
                            * check: check stored hashes against files
+                           * update: update metadata of changed files
+                           * check+update: check and update if new
                            * cleanup: remove hashes of missing files
                            * delete: remove hashes for found files
                            * list-dups: list files w/ dup hashes
@@ -175,6 +181,13 @@ optional arguments:
   -m, --maxactions=:       Max actions to take before exiting (default: maxint)
   -M, --maxdata=:          Max bytes to process before exiting (default: maxint)
   -b, --break-on-error:    Any error or hash failure will exit
+  -D, --diff-fields=:      Fields to use to indicate a file has 'changed' and
+                           and should be rehashed. Combine with ','.
+                           (default: size)
+                           * size
+                           * inode
+                           * mtime
+                           * mode
   -h, --help:              Print this message
 
 exit codes:
@@ -197,7 +210,7 @@ def build_arg_parser():
                         choices=['add','append',
                                  'backup','restore',
                                  'list-backups','diff-backup',
-                                 'check',
+                                 'check','update',
                                  'check+update','delete',
                                  'cleanup','list',
                                  'list-unhashed','list-dups',
@@ -236,6 +249,9 @@ def build_arg_parser():
     parser.add_argument('-b','--break-on-error',
                         action='store_true',
                         default=False)
+    parser.add_argument('-D','--diff-fields',
+                        type=str,
+                        default='size')
     parser.add_argument('-h','--help',
                         action='store_true',
                         default=False)
@@ -303,9 +319,14 @@ def get_fileinfo(filepath):
         return FileInfo(md5='',
                         size=st.st_size,
                         mode=st.st_mode,
-                        mtime=st.st_mtime)
+                        mtime=st.st_mtime,
+                        inode=st.st_ino)
     except:
         return None
+
+
+def iso8601(timestamp):
+    return dt.utcfromtimestamp(timestamp).isoformat() + 'Z'
 
 
 def print_filepath(filepath,count=0,total=0,quote=False,end=''):
@@ -346,12 +367,11 @@ def humansize(nbytes):
     rank = int(math.log(nbytes,1024)) if nbytes else 0
     rank = min(rank, len(suffixes) - 1)
     human = nbytes / (1024.0 ** rank)
-    f = ('%.2f' % human)
-    return '%s%s' % (f, suffixes[rank])
-
-
-def different_sizes(oldfi,newfi):
-    return (oldfi.size != newfi.size)
+    if suffixes[rank] == 'B':
+        f = int(human)
+    else:
+        f = '{:.2f}'.format(human)
+    return '{}{}'.format(f, suffixes[rank])
 
 
 def add_hashes(opts,path,db,dbadd,dbremove):
@@ -432,6 +452,47 @@ def append_hashes(opts,path,db,dbadd,dbremote):
     return rv | err
 
 
+def fileinfo_changes(oldfi,newfi):
+    changes = []
+
+    text = ' - size: '
+    if oldfi.size != newfi.size:
+        text += '{} -> {}'.format(humansize(oldfi.size),humansize(newfi.size))
+    else:
+        text += '{} (unchanged)'.format(humansize(oldfi.size))
+    changes.append(text)
+
+    text = ' - mtime: '
+    if oldfi.mtime != newfi.mtime:
+        text += '{} -> {}'.format(iso8601(oldfi.mtime),iso8601(newfi.mtime))
+    else:
+        text += '{} (unchanged)'.format(iso8601(oldfi.mtime))
+    changes.append(text)
+
+    text = ' - mode: '
+    if oldfi.mode != newfi.mode:
+        text += '{0:03o} -> {1:03o}'.format(oldfi.mode,newfi.mode)
+    else:
+        text += '{0:03o} (unchanged)'.format(oldfi.mode)
+    changes.append(text)
+
+    text = ' - inode: '
+    if oldfi.inode != newfi.inode:
+        text += '{} -> {}'.format(oldfi.inode,newfi.inode)
+    else:
+        text += '{} (unchanged)'.format(oldfi.inode)
+    changes.append(text)
+
+    return changes
+
+
+def different_files(old,new,fields):
+    return ((('size'  in fields) and (old.size  != new.size))  or
+            (('inode' in fields) and (old.inode != new.inode)) or
+            (('mtime' in fields) and (old.mtime != new.mtime)) or
+            (('mode'  in fields) and (old.mode  != new.mode)))
+
+
 def check_hashes(opts,path,db,dbadd,dbremove,update=False):
     rv  = ERROR_NOT_FOUND
     err = SUCCESS
@@ -458,46 +519,50 @@ def check_hashes(opts,path,db,dbadd,dbremove,update=False):
                 continue
 
             rv = SUCCESS
-            if different_sizes(oldfi,newfi):
+            if different_files(oldfi,newfi,opts.diff_fields):
                 err = err | ERROR_HASH_MISMATCH
+
+                changes = fileinfo_changes(oldfi,newfi)
                 print_filepath(filepath,actions,total,opts.quote)
-                old_size = humansize(oldfi.size)
-                new_size = humansize(newfi.size)
-                old_time = time.ctime(oldfi.mtime)
-                new_time = time.ctime(newfi.mtime)
-                old_mode = oct(oldfi.mode)
-                new_mode = oct(newfi.mode)
-                print('FILE CHANGED\n'
-                      ' - size: {} -> {}\n'
-                      ' - mtime: {} -> {}\n'
-                      ' - mode: {} -> {}'.format(old_size,new_size,
-                                                 old_time,new_time,
-                                                 old_mode,new_mode))
+                print(': CHANGED{}'.format(' (updated)' if update else ''))
+                for change in changes:
+                    print(change)
+
+                print(' - hash: {} -> '.format(oldfi.md5),end='')
                 if update:
                     newfi.md5 = hash_file(filepath)
+                    print('{}'.format(newfi.md5))
+
                     dbadd[filepath] = newfi
-                    print(' - hash: {} -> {}'.format(oldfi.md5,newfi.md5))
+                else:
+                    print('not calculated')
             else:
                 if opts.verbose:
                     print_filepath(filepath,actions,total,opts.quote)
 
-                oldhashval = oldfi.md5
-                newhashval = hash_file(filepath)
-                if newhashval != oldhashval:
+                newfi.md5 = hash_file(filepath)
+                if newfi.md5 != oldfi.md5:
                     err = err | ERROR_HASH_MISMATCH
                     if not opts.verbose:
                         print_filepath(filepath,actions,total,opts.quote)
                     print(': FAILED')
+                    changes = fileinfo_changes(oldfi,newfi)
+                    for change in changes:
+                        print(change)
+                    print(' - hash: {} -> {}'.format(oldfi.md5,newfi.md5))
                     if opts.breakonerror:
                         break
                 elif opts.verbose:
-                    print(': OK')
-                    if update:
-                        if ((oldfi.mtime != newfi.mtime) or
-                            (oldfi.mode  != newfi.mode)):
-                            oldfi.mtime = newfi.mtime
-                            oldfi.mode  = newfi.mode
-                            dbadd[filepath] = oldfi
+                    if update and oldfi != newfi:
+                        print(': OK (updated)')
+                        changes = fileinfo_changes(oldfi,newfi)
+                        for change in changes:
+                            print(change)
+                        print(' - hash: {} (unchanged)'.format(oldfi.md5))
+                        dbadd[filepath] = newfi
+                    else:
+                        print(': OK')
+
         except (KeyboardInterrupt,SystemExit):
             break
         except Exception as e:
@@ -512,6 +577,65 @@ def check_hashes(opts,path,db,dbadd,dbremove,update=False):
 
 def check_and_update_hashes(opts,path,db,dbadd,dbremove):
     return check_hashes(opts,path,db,dbadd,dbremove,update=True)
+
+
+def update_fileinfo(opts,path,db,dbadd,dbremove):
+    rv = SUCCESS
+    filepaths = filter_files(db.items(),opts.filter)
+    opts.sort(filepaths)
+
+    actions = 0
+    processed = 0
+    total = min(opts.maxactions,len(filepaths))
+    for (filepath,oldfi) in filepaths:
+        if actions >= opts.maxactions:
+            break
+        if processed >= opts.maxdata:
+            break
+
+        actions   += 1
+        processed += oldfi.size
+
+        try:
+            newfi = get_fileinfo(filepath)
+            if not newfi:
+                print_filepath(filepath,actions,total,opts.quote)
+                print(': MISSING')
+                continue
+
+            newfi.md5 = oldfi.md5
+            if oldfi == newfi:
+                if opts.verbose:
+                    print_filepath(filepath,actions,total,opts.quote)
+                    print(': UNCHANGED')
+                continue
+
+            changes = fileinfo_changes(oldfi,newfi)
+            if changes:
+                print_filepath(filepath,actions,total,opts.quote)
+                print(': CHANGED')
+                for change in changes:
+                    print(change)
+
+            print(' - hash: ',end='')
+            if different_files(oldfi,newfi,opts.diff_fields):
+                print('{} -> '.format(oldfi.md5),end='')
+                newfi.md5 = hash_file(filepath)
+                print('{}'.format(newfi.md5))
+            else:
+                print('{} (unchanged)'.format(oldfi.md5))
+
+            dbadd[filepath] = newfi
+        except (KeyboardInterrupt,SystemExit):
+            break
+        except Exception as e:
+            rv = rv | ERROR_PROCESSING
+            print_filepath(filepath,actions,total,opts.quote)
+            print('ERROR -',e)
+            if opts.breakonerror:
+                break
+
+    return rv
 
 
 def delete_hashes(opts,path,db,dbadd,dbremove):
@@ -721,10 +845,9 @@ def list_missing(opts,path,db,dbadd,dbremove):
 
     opts.sort(output)
     for (filepath,fi) in output:
-        if opts.verbose:
-            if opts.quote:
-                filepath = shlex.quote(filepath)
-            print(filepath)
+        if opts.quote:
+            filepath = shlex.quote(filepath)
+        print(filepath)
 
     return rv | err
 
@@ -902,7 +1025,7 @@ def notfound_in_db(opts,path,db,dbadd,dbremove):
 
 
 def backup_db(opts,path,db,dbadd,dbremove):
-    timestamp  = datetime.utcnow().replace(microsecond=0).isoformat() + 'Z'
+    timestamp  = dt.utcnow().replace(microsecond=0).isoformat() + 'Z'
     basepath   = os.path.dirname(opts.dbpath)
     filename   = os.path.basename(opts.dbpath)
     filename   = '{}.backup_{}'.format(filename,timestamp)
@@ -1010,11 +1133,12 @@ Instruction = namedtuple('Instruction',['fun','needs_dirs','load_db'])
 INSTRUCTIONS = {
     'add': Instruction(add_hashes,True,True),
     'append': Instruction(append_hashes,True,True),
-    'backup': Instruction(backup_db,False,True),
+    'backup': Instruction(backup_db,False,False),
     'restore': Instruction(restore_db,True,False),
     'list-backups': Instruction(list_backups,False,False),
     'diff-backup': Instruction(diff_backup,True,True),
     'check': Instruction(check_hashes,True,True),
+    'update': Instruction(update_fileinfo,True,True),
     'check+update': Instruction(check_and_update_hashes,True,True),
     'delete': Instruction(delete_hashes,True,True),
     'cleanup': Instruction(cleanup_hashes,True,True),
@@ -1070,11 +1194,20 @@ def read_db(filepath):
     try:
         with open_db(filepath) as f:
             reader = csv.reader(f,delimiter=',',quotechar='"')
-            for (filename,md5,size,mode,mtime) in reader:
+            for row in reader:
+                if len(row) == 5:
+                    (filename,md5,size,mode,mtime) = row
+                    inode = 0
+                elif len(row) == 6:
+                    (filename,md5,size,mode,mtime,inode) = row
+                else:
+                    raise IOError('unknown data layout in scorch database')
+
                 db[filename]=FileInfo(md5,
                                       int(size),
                                       int(mode),
-                                      float(mtime))
+                                      float(mtime),
+                                      int(inode))
     except (KeyboardInterrupt,SystemExit):
         raise
     except Exception as e:
@@ -1089,7 +1222,7 @@ def write_db_core(filepath,db):
     with gzip.open(tmpfilepath,'wt',encoding='utf-8',newline='') as f:
         writer = csv.writer(f,delimiter=',')
         for (k,v) in db.items():
-            row = (k,v.md5,v.size,v.mode,v.mtime)
+            row = (k,v.md5,v.size,v.mode,v.mtime,v.inode)
             writer.writerow(row)
     os.close(fd)
     os.replace(tmpfilepath,filepath)
@@ -1160,6 +1293,7 @@ def main():
     opts.maxdata      = human_to_bytes(args.maxdata)
     opts.breakonerror = args.break_on_error
     opts.dbpath       = process_dbpath(args.db)
+    opts.diff_fields  = args.diff_fields.split(',')
 
     if not args.dir:
         if INSTRUCTIONS[args.inst].needs_dirs:
