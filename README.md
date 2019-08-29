@@ -17,8 +17,9 @@ positional arguments:
                            * restore: restore backed up database
                            * list-backups: list database backups
                            * diff-backup: show diff between current & backup DB
-                           * check+update: check and update if new
                            * check: check stored hashes against files
+                           * update: update changed files
+                           * check+update: check and update if new
                            * cleanup: remove hashes of missing files
                            * delete: remove hashes for found files
                            * list-dups: list files w/ dup hashes
