@@ -22,6 +22,7 @@ import csv
 import errno
 import gzip
 import hashlib
+import io
 import math
 import os
 import random
@@ -65,12 +66,6 @@ class FileInfo(object):
     mode   = 0
     mtime  = 0
     inode  = 0
-
-    def __init__(self,size,mode,mtime,inode):
-        self.size  = size
-        self.mode  = mode
-        self.mtime = mtime
-        self.inode = inode
 
     def __init__(self,digest,size,mode,mtime,inode):
         self.digest = digest
@@ -147,11 +142,6 @@ class Adler32FileHash(object):
         return 'adler32:{:08x}'.format(digest)
 
 
-class Par2FileHash(object):
-    def hash(self,fullpath):
-        return 'par2:{}'.format(fullpath)
-
-
 class HashLibFileHash(object):
     _hash = None
 
@@ -175,7 +165,6 @@ def available_hashes():
     hashes.add('adler32')
     hashes.add('crc32')
     hashes.add('null')
-    hashes.add('par2')
     return sorted(hashes)
 
 
@@ -186,8 +175,6 @@ def file_hash_factory(algo):
         return Crc32FileHash()
     if algo == 'null':
         return NullFileHash()
-    if algo == 'par2':
-        return Par2FileHash()
     return HashLibFileHash(algo)
 
 
@@ -214,7 +201,7 @@ def print_help():
 usage: scorch [<options>] <instruction> [<directory>]
 
 scorch (Silent CORruption CHecker) is a tool to catalog files, hash
-digests, and other meatadat to help in discovering file corruption,
+digests, and other metadata to help in discovering file corruption,
 missing files, duplicates, etc.
 
 positional arguments:
@@ -532,7 +519,7 @@ def inst_append(opts,path,db,dbadd,dbremote):
         except Exception as e:
             err = err | ERROR_PROCESSING
             if opts.verbose:
-                print('ERROR -',e)
+                print(': ERROR -',e)
             if opts.breakonerror:
                 break
 
@@ -718,7 +705,7 @@ def inst_update(opts,path,db,dbadd,dbremove):
         except Exception as e:
             rv = rv | ERROR_PROCESSING
             print_filepath(filepath,actions,total,opts.quote)
-            print('ERROR -',e)
+            print(': ERROR -',e)
             if opts.breakonerror:
                 break
 
@@ -1039,7 +1026,7 @@ def inst_found_in_db(opts,path,db,dbadd,dbremove):
             break
         except Exception as e:
             rv = rv | ERROR_PROCESSING
-            print('ERROR -',e)
+            print('Error while processing: ',e,file=sys.stderr)
 
     return rv
 
@@ -1106,7 +1093,7 @@ def inst_notfound_in_db(opts,path,db,dbadd,dbremove):
             break
         except Exception as e:
             rv = rv | ERROR_PROCESSING
-            print('ERROR -',e)
+            print('Error while processing:',e,file=sys.stderr)
 
     return rv
 
@@ -1130,7 +1117,7 @@ def inst_backup(opts,path,db,dbadd,dbremove):
     except Exception as e:
         if tmp_dbpath:
             os.remove(tmp_dbpath)
-        print('Error backing up {} - {}'.format(tgt_dbpath,e))
+        print('Error backing up: {} - {}'.format(tgt_dbpath,e),file=sys.stderr)
         return ERROR_PROCESSING
 
 
@@ -1147,7 +1134,7 @@ def inst_restore(opts,path,db,dbadd,dbremove):
     except Exception as e:
         if tmp_dbpath:
             os.remove(tmp_dbpath)
-        print('Error restoring {} - {}'.format(path,e))
+        print('Error restoring: {} - {}'.format(path,e),file=sys.stderr)
         return ERROR_PROCESSING
 
 
@@ -1170,7 +1157,8 @@ def inst_list_backups(opts,path,db,dbadd,dbremove):
             print(backup)
         return SUCCESS
     except Exception as e:
-        print('Error listing backups for {} - {}'.format(opts.dbpath,e))
+        msg = 'Error listing backups: {} - {}'.format(opts.dbpath,e)
+        print(msg,file=sys.stderr)
         return ERROR_PROCESSING
 
 
@@ -1301,7 +1289,8 @@ def read_db(filepath):
     except (KeyboardInterrupt,SystemExit):
         raise
     except Exception as e:
-        print('Error reading scorch DB:',e)
+        msg = 'Error reading scorch DB: {} - {}'.format(filepath,e)
+        print(msg,file=sys.stderr)
     return db
 
 
@@ -1335,7 +1324,8 @@ def write_db(src_filepath,tgt_filepath,dbadd,dbremove):
     except (KeyboardInterrupt,SystemExit):
         raise
     except Exception as e:
-        print('Error writing scorch DB:',e)
+        msg = 'Error writing scorch DB: {} - {}'.format(tgt_filepath,e)
+        print(msg,file=sys.stderr)
 
 
 def process_directories(dirs):
@@ -1369,9 +1359,12 @@ def process_dbpath(dbpath):
 
 
 def main():
-    sys.stdout = open(sys.stdout.fileno(),'w',
-                      encoding='utf8',errors='surrogateescape',
-                      closefd=False)
+    sys.stdout = io.TextIOWrapper(sys.stdout.buffer,
+                                  errors="surrogateescape",
+                                  line_buffering=True)
+    sys.stderr = io.TextIOWrapper(sys.stderr.buffer,
+                                  errors="surrogateescape",
+                                  line_buffering=True)
 
     parser = build_arg_parser()
     args   = parser.parse_args()
@@ -1435,15 +1428,10 @@ def main():
     except IOError as e:
         if e.errno != errno.EPIPE:
             rv = rv | ERROR_PROCESSING
-            print(e)
+            print('General processing error:',e,file=sys.stderr)
     except Exception as e:
         rv = rv | ERROR_PROCESSING
         raise
-
-    try:
-        sys.stdout.close()
-    except Exception as e:
-        pass
 
     sys.exit(rv)
 
