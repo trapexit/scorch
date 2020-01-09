@@ -596,29 +596,28 @@ def inst_check(opts,path,db,dbadd,dbremove,update=False):
             if different_files(oldfi,newfi,opts.diff_fields):
                 err = err | ERROR_DIGEST_MISMATCH
 
-                changes = fileinfo_changes(oldfi,newfi)
-                print_filepath(filepath,actions,total,opts.quote)
-                print(': CHANGED{}'.format(' (updated)' if update else ''))
-                for change in changes:
-                    print(change)
+                if opts.verbose:
+                    changes = fileinfo_changes(oldfi,newfi)
+                    print_filepath(filepath,actions,total,opts.quote)
+                    print(': CHANGED{}'.format(' (updated)' if update else ''))
+                    for change in changes:
+                        print(change)
+                    print(' - digest: {} -> '.format(oldfi.digest),end='')
 
-                print(' - digest: {} -> '.format(oldfi.digest),end='')
                 if update:
                     newfi.digest = hash_file(filepath,opts.hash)
-                    print('{}'.format(newfi.digest))
+                    if opts.verbose:
+                        print('{}'.format(newfi.digest))
 
                     dbadd[filepath] = newfi
                 else:
-                    print('not calculated')
+                    if opts.verbose:
+                        print('not calculated')
             else:
-                if opts.verbose:
-                    print_filepath(filepath,actions,total,opts.quote)
-
                 newfi.digest = hash_file(filepath,oldfi.digest)
                 if newfi.digest != oldfi.digest:
                     err = err | ERROR_DIGEST_MISMATCH
-                    if not opts.verbose:
-                        print_filepath(filepath,actions,total,opts.quote)
+                    print_filepath(filepath,actions,total,opts.quote)
                     print(': FAILED')
                     changes = fileinfo_changes(oldfi,newfi)
                     for change in changes:
@@ -626,17 +625,20 @@ def inst_check(opts,path,db,dbadd,dbremove,update=False):
                     print(' - digest: {} -> {}'.format(oldfi.digest,newfi.digest))
                     if opts.breakonerror:
                         break
-                elif opts.verbose:
+                else:
                     if update and oldfi != newfi:
-                        print(': OK (updated)')
-                        changes = fileinfo_changes(oldfi,newfi)
-                        for change in changes:
-                            print(change)
-                        print(' - digest: {} (unchanged)'.format(oldfi.digest))
+                        if opts.verbose:
+                            print_filepath(filepath,actions,total,opts.quote)
+                            print(': OK (updated)')
+                            changes = fileinfo_changes(oldfi,newfi)
+                            for change in changes:
+                                print(change)
+                            print(' - digest: {} (unchanged)'.format(oldfi.digest))
                         dbadd[filepath] = newfi
                     else:
-                        print(': OK')
-
+                        if opts.verbose >= 2:
+                            print_filepath(filepath,actions,total,opts.quote)
+                            print(': OK')
         except (KeyboardInterrupt,SystemExit):
             break
         except Exception as e:
@@ -679,25 +681,30 @@ def inst_update(opts,path,db,dbadd,dbremove):
 
             newfi.digest = oldfi.digest
             if oldfi == newfi:
-                if opts.verbose:
+                if opts.verbose >= 2:
                     print_filepath(filepath,actions,total,opts.quote)
                     print(': UNCHANGED')
                 continue
 
-            changes = fileinfo_changes(oldfi,newfi)
-            if changes:
-                print_filepath(filepath,actions,total,opts.quote)
-                print(': CHANGED')
-                for change in changes:
-                    print(change)
 
-            print(' - digest: ',end='')
+            if opts.verbose:
+                print_filepath(filepath,actions,total,opts.quote)
+
             if different_files(oldfi,newfi,opts.diff_fields):
-                print('{} -> '.format(oldfi.digest),end='')
                 newfi.digest = hash_file(filepath,opts.hash)
-                print('{}'.format(newfi.digest))
-            else:
-                print('{} (unchanged)'.format(oldfi.digest))
+
+            if opts.verbose:
+                changes = fileinfo_changes(oldfi,newfi)
+                if changes:
+                    print(': CHANGED')
+                    for change in changes:
+                        print(change)
+                print(' - digest: ',end='')
+                if newfi.digest != oldfi.digest:
+                    print('{} -> '.format(oldfi.digest),end='')
+                    print('{}'.format(newfi.digest))
+                else:
+                    print('{} (unchanged)'.format(oldfi.digest))
 
             dbadd[filepath] = newfi
         except (KeyboardInterrupt,SystemExit):
