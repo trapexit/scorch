@@ -7,64 +7,69 @@ scorch is a tool to catalog files and their hashes to help in discovering file c
 ```
 usage: scorch [<options>] <instruction> [<directory>]
 
-scorch (Silent CORruption CHecker) is a tool to catalog files and hashes
-to help in discovering file corruption, missing files, duplicates, etc.
+scorch (Silent CORruption CHecker) is a tool to catalog files, hash
+digests, and other metadata to help in discovering file corruption,
+missing files, duplicates, etc.
 
 positional arguments:
-  instruction:             * add: compute and store hashes for all found files
-                           * append: compute and store for newly found files
-                           * backup: backs up selected database
-                           * restore: restore backed up database
-                           * list-backups: list database backups
-                           * diff-backup: show diff between current & backup DB
-                           * hashes: print available hash functions
-                           * check: check stored hashes against files
-                           * update: update metadata of changed files
-                           * check+update: check and update if new
-                           * cleanup: remove hashes of missing files
-                           * delete: remove hashes for found files
-                           * list-dups: list files w/ dup hashes
-                           * list-missing: list files no longer on filesystem
-                           * list-solo: list files w/ no dup hashes
-                           * list-unhashed: list files not yet hashed
-                           * list: md5sum'ish compatible listing
-                           * in-db: show if hashed files exist in DB
-                           * found-in-db: print files found in DB
-                           * notfound-in-db: print files not found in DB
-  directory:               Directory or file to scan
+  instruction:           * add: compute & store digests for found files
+                         * append: compute & store digests for unhashed files
+                         * backup: backs up selected database
+                         * restore: restore backed up database
+                         * list-backups: list database backups
+                         * diff-backup: show diff between current & backup DB
+                         * hashes: print available hash functions
+                         * check: check stored info against files
+                         * update: update metadata of changed files
+                         * check+update: check and update if new
+                         * cleanup: remove info of missing files
+                         * delete: remove info for found files
+                         * list: md5sum'ish compatible listing
+                         * list-unhashed: list files not yet hashed
+                         * list-missing: list files no longer on filesystem
+                         * list-dups: list files w/ dup digests
+                         * list-solo: list files w/ no dup digests
+                         * list-failed: list files marked failed
+                         * list-changed: list files marked changed
+                         * in-db: show if files exist in DB
+                         * found-in-db: print files found in DB
+                         * notfound-in-db: print files not found in DB
+  directory:             Directory or file to scan.
 
 optional arguments:
-  -d, --db=:               File to store hashes and other metadata in.
-                           (default: /var/tmp/scorch/scorch.db)
-  -v, --verbose:           Make `instruction` more verbose. Actual behavior
-                           depends on the instruction. Can be used multiple
-                           times.
-  -q, --quote:             Shell quote/escape filenames when printed.
-  -r, --restrict=:         * sticky: restrict scan to files with sticky bit
-                           * readonly: restrict scan to readonly files
-  -f, --fnfilter=:         Restrict actions to files which match regex
-  -F, --negate-fnfilter    Negate the fnfilter regex match
-  -s, --sort=:             Sorting routine on input & output (default: natural)
-                           * random: shuffled / random
-                           * natural: human-friendly sort, ascending
-                           * reverse-natural: human-friendly sort, descending
-                           * radix: RADIX sort, ascending
-                           * reverse-radix: RADIX sort, descending
-                           * time: sort by file mtime, ascending
-                           * reverse-time: sort by file mtime, descending
-  -m, --maxactions=:       Max actions to take before exiting (default: maxint)
-  -M, --maxdata=:          Max bytes to process before exiting (default: maxint)
-  -b, --break-on-error:    Any error or hash failure will exit
-  -D, --diff-fields=:      Fields to use to indicate a file has 'changed' and
-                           and should be rehashed. Combine with ','.
-                           (default: size)
-                           * size
-                           * inode
-                           * mtime
-                           * mode
-  -H, --hash=:             Hash algo. Use 'scorch hashes' get available algos.
-                           (default: md5)
-  -h, --help:              Print this message
+  -d, --db=:             File to store digests and other metadata in. See
+                         docs for info. (default: /var/tmp/scorch/scorch.db)
+  -v, --verbose:         Make `instruction` more verbose. Actual behavior
+                         depends on the instruction. Can be used multiple
+                         times.
+  -q, --quote:           Shell quote/escape filenames when printed.
+  -r, --restrict=:       * sticky: restrict scan to files with sticky bit
+                         * readonly: restrict scan to readonly files
+  -f, --fnfilter=:       Restrict actions to files which match regex.
+  -F, --negate-fnfilter  Negate the fnfilter regex match.
+  -s, --sort=:           Sorting routine on input & output. (default: natural)
+                         * random: shuffled / random
+                         * natural: human-friendly sort, ascending
+                         * natural-desc: human-friendly sort, descending
+                         * radix: RADIX sort, ascending
+                         * radix-desc: RADIX sort, descending
+                         * mtime: sort by file mtime, ascending
+                         * mtime-desc: sort by file mtime, descending
+                         * checked: sort by last time checked, ascending
+                         * checked-desc: sort by last time checked, descending
+  -m, --maxactions=:     Max actions before exiting. (default: maxint)
+  -M, --maxdata=:        Max bytes to process before exiting. (default: maxint)
+  -b, --break-on-error:  Any error or digest mismatch will cause an exit.
+  -D, --diff-fields=:    Fields to use to indicate a file has 'changed' (vs.
+                         bitrot / modified) and should be rehashed.
+                         Combine with ','. (default: size)
+                         * size
+                         * inode
+                         * mtime
+                         * mode
+  -H, --hash=:           Hash algo. Use 'scorch hashes' get available algos.
+                         (default: md5)
+  -h, --help:            Print this message.
 
 exit codes:
   *  0 : success, behavior executed, something found
@@ -82,14 +87,14 @@ exit codes:
 The file is simply CSV compressed with gzip.
 
 ```
-$ # file, hash digest, size, mode, mtime, inode
+$ # file, hash:digest, size, mode, mtime, inode, state, checked
 $ zcat /var/tmp/scorch/scorch.db
-/tmp/files/a,md5:d41d8cd98f00b204e9800998ecf8427e,0,33188,1546377833.3844686,123456
+/tmp/files/a,md5:d41d8cd98f00b204e9800998ecf8427e,0,33188,1546377833.3844686,123456,0,1588895022.6193066
 ```
 
 #### --db argument
 
-The `--db` argument is takes more than a path.
+The `--db` argument can take more than a path.
 
 * /tmp/test/myfiles.db : Full path. Used as is.
 * /tmp/test : If /tmp/test is a directory -> /tmp/test/scorch.db
@@ -99,11 +104,6 @@ The `--db` argument is takes more than a path.
 * test : No forward slashes -> /var/tmp/scorch/test.db
 
 If there is no extension then `.db` will be added.
-
-
-#### Upgrade
-
-If you're using an older version of scorch with the default database in `/var/tmp/scorch.db` just copy/move the file to `/var/tmp/scorch/scorch.db`. The old format was not compressed but scorch will handle reading it uncompressed and compressing it on write.
 
 
 #### Backup / Restore
@@ -149,10 +149,16 @@ $ scorch -v -d /tmp/hash.db list-unhashed /tmp/files
 /tmp/files/d
 
 $ scorch -v -d /tmp/hash.db append /tmp/files
-1/1 /tmp/files/d: 2b00042f7481c7b056c4b410d28f33cf
+1/1 /tmp/files/d: md5:2b00042f7481c7b056c4b410d28f33cf
+
+$ scorch -d /tmp/hash.db list-dups /tmp/files
+md5:d41d8cd98f00b204e9800998ecf8427e /tmp/files/a /tmp/files/b /tmp/files/c
 
 $ scorch -v -d /tmp/hash.db list-dups /tmp/files
-d41d8cd98f00b204e9800998ecf8427e /tmp/files/a /tmp/files/b /tmp/files/c
+md5:d41d8cd98f00b204e9800998ecf8427e
+ - /tmp/files/a
+ - /tmp/files/b
+ - /tmp/files/c
 
 $ echo foo > /tmp/files/a
 $ scorch -v -d /tmp/hash.db check+update /tmp/files
@@ -179,7 +185,7 @@ A typical setup would probably be initialized manually by using **add** or **app
 ```
 #!/bin/sh
 
-scorch check+update /tmp/files
+scorch -M 100G check+update /tmp/files
 scorch append /tmp/files
 scorch cleanup /tmp/files
 ```
