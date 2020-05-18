@@ -49,6 +49,7 @@ ERROR_ARG = 2
 ERROR_DIGEST_MISMATCH = 4
 ERROR_FOUND = 8
 ERROR_NOT_FOUND = 16
+ERROR_INTERRUPTED = 32
 
 
 class Options(object):
@@ -272,6 +273,7 @@ exit codes:
   *  4 : hash mismatch
   *  8 : found
   * 16 : not found, nothing processed
+  * 32 : interrupted
 '''
     print(help)
 
@@ -489,6 +491,7 @@ def inst_add(opts,path,db,dbremove):
             append_to_db(opts.dbpath,filepath,fi)
             rv = SUCCESS
         except (KeyboardInterrupt,SystemExit):
+            err = err | ERROR_INTERRUPTED
             break
         except Exception as e:
             err = err | ERROR_PROCESSING
@@ -530,6 +533,7 @@ def inst_append(opts,path,db,dbremote):
             append_to_db(opts.dbpath,filepath,fi)
             rv = SUCCESS
         except (KeyboardInterrupt,SystemExit):
+            err = err | ERROR_INTERRUPTED
             break
         except Exception as e:
             err = err | ERROR_PROCESSING
@@ -664,6 +668,7 @@ def inst_check(opts,path,db,dbremove,update=False):
                         print(': OK')
                         append_to_db(opts.dbpath,filepath,oldfi)
         except (KeyboardInterrupt,SystemExit):
+            err = err | ERROR_INTERRUPTED
             break
         except Exception as e:
             err = err | ERROR_PROCESSING
@@ -729,6 +734,7 @@ def inst_update(opts,path,db,dbremove):
             newfi.checked = time.time()
             append_to_db(opts.dbpath,filepath,newfi)
         except (KeyboardInterrupt,SystemExit):
+            rv = rv | ERROR_INTERRUPTED
             break
         except Exception as e:
             rv = rv | ERROR_PROCESSING
@@ -990,6 +996,7 @@ def inst_in_db(opts,path,db,dbremove):
                     rv = rv | ERROR_FOUND
                     print(': YES')
         except (KeyboardInterrupt,SystemExit):
+            rv = rv | ERROR_INTERRUPTED
             break
         except Exception as e:
             rv = rv | ERROR_PROCESSING
@@ -1049,6 +1056,7 @@ def inst_found_in_db(opts,path,db,dbremove):
                 t = tuple([digest,filepath] + hashdb[digest])
                 writer.writerow(t)
         except (KeyboardInterrupt,SystemExit):
+            rv = rv | ERROR_INTERRUPTED
             break
         except Exception as e:
             rv = rv | ERROR_PROCESSING
@@ -1116,6 +1124,7 @@ def inst_notfound_in_db(opts,path,db,dbremove):
                 else:
                     rv = rv | ERROR_FOUND
         except (KeyboardInterrupt,SystemExit):
+            rv = rv | ERROR_INTERRUPTED
             break
         except Exception as e:
             rv = rv | ERROR_PROCESSING
@@ -1550,7 +1559,7 @@ def main():
             try:
                 rv = rv | func(opts,directory,db,dbremove)
             except (KeyboardInterrupt,SystemExit):
-                pass
+                rv = rv | ERROR_INTERRUPTED
 
             if (len(dbremove) or (db_mtime != mtime(opts.dbpath))):
                 write_db(opts.dbpath,dbremove)
@@ -1558,7 +1567,7 @@ def main():
             if opts.breakonerror and rv:
                 break
     except (KeyboardInterrupt,SystemExit):
-        pass
+        rv = rv | ERROR_INTERRUPTED
     except IOError as e:
         if e.errno != errno.EPIPE:
             raise
