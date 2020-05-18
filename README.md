@@ -59,6 +59,9 @@ optional arguments:
                          * checked-desc: sort by last time checked, descending
   -m, --maxactions=:     Max actions before exiting. (default: maxint)
   -M, --maxdata=:        Max bytes to process before exiting. (default: maxint)
+                         Can use 'K', 'M', 'G', 'T' suffix.
+  -T, --maxtime=:        Max time to process before exiting. (default: maxint)
+                         Can use 's', 'm', 'h', 'd' suffix.
   -b, --break-on-error:  Any error or digest mismatch will cause an exit.
   -D, --diff-fields=:    Fields to use to indicate a file has 'changed' (vs.
                          bitrot / modified) and should be rehashed.
@@ -78,6 +81,7 @@ exit codes:
   *  4 : hash mismatch
   *  8 : found
   * 16 : not found, nothing processed
+  * 32 : interrupted
 ```
 
 ### Database
@@ -91,6 +95,11 @@ $ # file, hash:digest, size, mode, mtime, inode, state, checked
 $ zcat /var/tmp/scorch/scorch.db
 /tmp/files/a,md5:d41d8cd98f00b204e9800998ecf8427e,0,33188,1546377833.3844686,123456,0,1588895022.6193066
 ```
+
+The 'state' value can be 'U' for unknown, 'C' for changed, 'F' for failed, or 'O' for OK.
+
+The 'mtime' and 'checked' values are floating point seconds since epoch.
+
 
 #### --db argument
 
@@ -185,7 +194,7 @@ A typical setup would probably be initialized manually by using **add** or **app
 ```
 #!/bin/sh
 
-scorch -M 100G check+update /tmp/files
+scorch -M 128G -T 2h check+update /tmp/files
 scorch append /tmp/files
 scorch cleanup /tmp/files
 ```
@@ -208,7 +217,10 @@ This software is free to use and released under a very liberal license. That sai
 
 * PayPal: trapexit@spawn.link
 * Patreon: https://www.patreon.com/trapexit
-* Bitcoin (BTC): 12CdMhEPQVmjz3SSynkAEuD5q9JmhTDCZA
-* Bitcoin Cash (BCH): 1AjPqZZhu7GVEs6JFPjHmtsvmDL4euzMzp
-* Ethereum (ETH): 0x09A166B11fCC127324C7fc5f1B572255b3046E94
-* Litecoin (LTC): LXAsq6yc6zYU3EbcqyWtHBrH1Ypx4GjUjm
+* Bitcoin (BTC): 1DfoUd2m5WCxJAMvcFuvDpT4DR2gWX2PWb
+* Bitcoin Cash (BCH): qrf257j0l09yxty4kur8dk2uma8p5vntdcpks72l8z
+* Ethereum (ETH): 0xb486C0270fF75872Fc51d85879b9c15C380E66CA
+* Litecoin (LTC): LW1rvHRPWtm2NUEMhJpP4DjHZY1FaJ1WYs
+* Basic Attention Token (BAT): 0xE651d4900B4C305284Da43E2e182e9abE149A87A
+* Zcash (ZEC): t1ZwTgmbQF23DJrzqbAmw8kXWvU2xUkkhTt
+* Zcoin (XZC): a8L5Vz35KdCQe7Y7urK2pcCGau7JsqZ5Gw

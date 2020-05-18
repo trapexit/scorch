@@ -60,6 +60,7 @@ class Options(object):
     filter       = None
     maxactions   = sys.maxsize
     maxdata      = sys.maxsize
+    maxtime      = sys.maxsize
     breakonerror = False
     diff_fields  = ['size']
 
@@ -254,6 +255,9 @@ optional arguments:
                          * checked-desc: sort by last time checked, descending
   -m, --maxactions=:     Max actions before exiting. (default: maxint)
   -M, --maxdata=:        Max bytes to process before exiting. (default: maxint)
+                         Can use 'K', 'M', 'G', 'T' suffix.
+  -T, --maxtime=:        Max time to process before exiting. (default: maxint)
+                         Can use 's', 'm', 'h', 'd' suffix.
   -b, --break-on-error:  Any error or digest mismatch will cause an exit.
   -D, --diff-fields=:    Fields to use to indicate a file has 'changed' (vs.
                          bitrot / modified) and should be rehashed.
@@ -326,6 +330,9 @@ def build_arg_parser():
                         type=int,
                         default=sys.maxsize)
     parser.add_argument('-M','--maxdata',
+                        type=str,
+                        default=str(sys.maxsize))
+    parser.add_argument('-T','--maxtime',
                         type=str,
                         default=str(sys.maxsize))
     parser.add_argument('-b','--break-on-error',
@@ -443,6 +450,22 @@ def human_to_bytes(s):
     return i
 
 
+def human_to_time(s):
+    m = s[-1]
+    if   m in ['s','S']:
+        t = int(s[0:-1])
+    elif m in ['m','M']:
+        t = int(s[0:-1]) * 60
+    elif m in ['h','H']:
+        t = int(s[0:-1]) * 60 * 60
+    elif m in ['d','D']:
+        t = int(s[0:-1]) * 60 * 60 * 24
+    else:
+        t = int(s)
+
+    return t
+
+
 def humansize(nbytes):
     suffixes = ['B','KB','MB','GB','TB','PB','ZB']
     rank = int(math.log(nbytes,1024)) if nbytes else 0
@@ -469,11 +492,14 @@ def inst_add(opts,path,db,dbremove):
 
     actions = 0
     processed = 0
+    endtime = time.time() + opts.maxtime
     total = min(opts.maxactions,len(filepaths))
     for (filepath,fi) in filepaths:
         if actions >= opts.maxactions:
             break
         if processed >= opts.maxdata:
+            break
+        if time.time() >= endtime:
             break
 
         actions   += 1
@@ -511,11 +537,14 @@ def inst_append(opts,path,db,dbremote):
 
     actions = 0
     processed = 0
+    endtime = time.time() + opts.maxtime
     total = min(opts.maxactions,len(filepaths))
     for (filepath,fi) in filepaths:
         if actions >= opts.maxactions:
             break
         if processed >= opts.maxdata:
+            break
+        if time.time() >= endtime:
             break
 
         actions   += 1
@@ -594,11 +623,14 @@ def inst_check(opts,path,db,dbremove,update=False):
 
     actions = 0
     processed = 0
+    endtime = time.time() + opts.maxtime
     total = min(opts.maxactions,len(filepaths))
     for (filepath,oldfi) in filepaths:
         if actions >= opts.maxactions:
             break
         if processed >= opts.maxdata:
+            break
+        if time.time() >= endtime:
             break
 
         actions   += 1
@@ -691,11 +723,14 @@ def inst_update(opts,path,db,dbremove):
 
     actions = 0
     processed = 0
+    endtime = time.time() + opts.maxtime
     total = min(opts.maxactions,len(filepaths))
     for (filepath,oldfi) in filepaths:
         if actions >= opts.maxactions:
             break
         if processed >= opts.maxdata:
+            break
+        if time.time() >= endtime:
             break
 
         actions   += 1
@@ -754,11 +789,14 @@ def inst_delete(opts,path,db,dbremove):
 
     actions = 0
     processed = 0
+    endtime = time.time() + opts.maxtime
     total = min(opts.maxactions,len(filepaths))
     for (filepath,fi) in filepaths:
         if actions >= opts.maxactions:
             break
         if processed >= opts.maxdata:
+            break
+        if time.time() >= endtime:
             break
 
         actions   += 1
@@ -783,11 +821,14 @@ def inst_cleanup(opts,path,db,dbremove):
 
     actions = 0
     processed = 0
+    endtime = time.time() + opts.maxtime
     total = min(opts.maxactions,len(filepaths))
     for (filepath,fi) in filepaths:
         if actions >= opts.maxactions:
             break
         if processed >= opts.maxdata:
+            break
+        if time.time() >= endtime:
             break
 
         actions   += 1
@@ -810,10 +851,13 @@ def inst_list(opts,path,db,dbremove):
 
     actions = 0
     processed = 0
+    endtime = time.time() + opts.maxtime
     for (filepath,fi) in filepaths:
         if actions >= opts.maxactions:
             break
         if processed >= opts.maxdata:
+            break
+        if time.time() >= endtime:
             break
 
         actions   += 1
@@ -838,10 +882,13 @@ def inst_list_unhashed(opts,path,db,dbremove):
 
     actions = 0
     processed = 0
+    endtime = time.time() + opts.maxtime
     for (filepath,fi) in filepaths:
         if actions >= opts.maxactions:
             break
         if processed >= opts.maxdata:
+            break
+        if time.time() >= endtime:
             break
 
         actions   += 1
@@ -870,11 +917,14 @@ def inst_list_dups(opts,path,db,dbremove):
         hashdb[fi.digest].append(filepath)
 
     actions = 0
+    endtime = time.time() + opts.maxtime
     for (digest,filepaths) in hashdb.items():
         if len(filepaths) <= 1:
             continue
 
         if actions >= opts.maxactions:
+            break
+        if time.time() >= endtime:
             break
 
         actions += 1
@@ -905,12 +955,15 @@ def inst_list_solo(opts,path,db,dbremove):
         hashdb[fi.digest].append(filepath)
 
     actions = 0
+    endtime = time.time() + opts.maxtime
     for (digest,filepaths) in hashdb.items():
         if len(filepaths) > 1:
             continue
 
         if actions >= opts.maxactions:
             return rv
+        if time.time() >= endtime:
+            break
 
         actions += 1
 
@@ -930,6 +983,7 @@ def inst_list_missing(opts,path,db,dbremove):
 
     actions = 0
     processed = 0
+    endtime = time.time() + opts.maxtime
     output  = []
     for (filepath,fi) in db.items():
         if commonprefix([path,filepath]) != path:
@@ -941,6 +995,8 @@ def inst_list_missing(opts,path,db,dbremove):
         if actions >= opts.maxactions:
             break
         if processed >= opts.maxdata:
+            break
+        if time.time() >= endtime:
             break
 
         actions   += 1
@@ -971,6 +1027,7 @@ def inst_in_db(opts,path,db,dbremove):
 
     actions = 0
     processed = 0
+    endtime = time.time() + opts.maxtime
     filepaths = get_files(path,opts.filter)
     total = min(opts.maxactions,len(filepaths))
     for (filepath,fi) in filepaths:
@@ -978,6 +1035,8 @@ def inst_in_db(opts,path,db,dbremove):
             if actions >= opts.maxactions:
                 break
             if processed >= opts.maxdata:
+                break
+            if time.time() >= endtime:
                 break
 
             actions   += 1
@@ -1019,12 +1078,15 @@ def inst_found_in_db(opts,path,db,dbremove):
 
     actions = 0
     processed = 0
+    endtime = time.time() + opts.maxtime
     filepaths = get_files(path,opts.filter)
     for (filepath,fi) in filepaths:
         try:
             if actions >= opts.maxactions:
                 break
             if processed >= opts.maxdata:
+                break
+            if time.time() >= endtime:
                 break
 
             actions   += 1
@@ -1075,12 +1137,15 @@ def inst_notfound_in_db(opts,path,db,dbremove):
 
     actions = 0
     processed = 0
+    endtime = time.time() + opts.maxtime
     filepaths = get_files(path,opts.filter)
     for (filepath,fi) in filepaths:
         try:
             if actions >= opts.maxactions:
                 break
             if processed >= opts.maxdata:
+                break
+            if time.time() >= endtime:
                 break
 
             actions   += 1
@@ -1525,6 +1590,7 @@ def main():
     opts.sort         = sort_fun(args.sort)
     opts.maxactions   = args.maxactions
     opts.maxdata      = human_to_bytes(args.maxdata)
+    opts.maxtime      = human_to_time(args.maxtime)
     opts.breakonerror = args.break_on_error
     opts.dbpath       = calculate_dbpath(args.db)
     opts.diff_fields  = args.diff_fields.split(',')
