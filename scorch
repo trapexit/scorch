@@ -52,15 +52,19 @@ ERROR_NOT_FOUND = 16
 ERROR_INTERRUPTED = 32
 
 
+MAX_ACTIONS = 2**64
+MAX_TIME    = 2**64
+MAX_DATA    = 2**64
+
 class Options(object):
     verbose      = 0
     hash         = 'md5'
     quote        = 0
     sort         = None
     filter       = None
-    maxactions   = sys.maxsize
-    maxdata      = sys.maxsize
-    maxtime      = sys.maxsize
+    maxactions   = MAX_ACTIONS
+    maxdata      = MAX_DATA
+    maxtime      = MAX_TIME
     breakonerror = False
     diff_fields  = ['size']
 
@@ -253,10 +257,10 @@ optional arguments:
                          * mtime-desc: sort by file mtime, descending
                          * checked: sort by last time checked, ascending
                          * checked-desc: sort by last time checked, descending
-  -m, --maxactions=:     Max actions before exiting. (default: maxint)
-  -M, --maxdata=:        Max bytes to process before exiting. (default: maxint)
+  -m, --maxactions=:     Max actions before exiting. (default: 2**64)
+  -M, --maxdata=:        Max bytes to process before exiting. (default: 2**64)
                          Can use 'K', 'M', 'G', 'T' suffix.
-  -T, --maxtime=:        Max time to process before exiting. (default: maxint)
+  -T, --maxtime=:        Max time to process before exiting. (default: 2**64)
                          Can use 's', 'm', 'h', 'd' suffix.
   -b, --break-on-error:  Any error or digest mismatch will cause an exit.
   -D, --diff-fields=:    Fields to use to indicate a file has 'changed' (vs.
