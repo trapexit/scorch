@@ -1372,7 +1372,7 @@ INSTRUCTIONS = {
     'check': Instruction(inst_check,True,True),
     'update': Instruction(inst_update,True,True),
     'check+update': Instruction(inst_check_and_update,True,True),
-    'delete': Instruction(inst_delete,True,False),
+    'delete': Instruction(inst_delete,True,True),
     'cleanup': Instruction(inst_cleanup,True,True),
     'list': Instruction(inst_list,True,True),
     'list-unhashed': Instruction(inst_list_unhashed,True,True),
