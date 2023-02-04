@@ -39,6 +39,10 @@ import zlib
 from collections import namedtuple
 from datetime import datetime as dt
 from itertools import takewhile
+try:
+    from blake3 import blake3
+except ImportError:
+    pass
 
 
 DEFAULT_DB     = 'scorch'
@@ -149,6 +153,24 @@ class Adler32FileHash(object):
         return 'adler32:{:08x}'.format(digest)
 
 
+class Blake3FileHash(object):
+    _hash = None
+
+    def __init__(self):
+        self._hash = blake3(max_threads=blake3.AUTO)
+
+    def hash(self,fullpath):
+        blocksize = 65536
+
+        with open(fullpath,'rb') as f:
+            buf = f.read(blocksize)
+            while buf:
+                self._hash.update(buf)
+                buf = f.read(blocksize)
+
+        return 'blake3:{}'.format(self._hash.hexdigest())
+
+
 class HashLibFileHash(object):
     _hash = None
 
@@ -171,6 +193,8 @@ def available_hashes():
     hashes = hashlib.algorithms_available
     hashes.add('adler32')
     hashes.add('crc32')
+    if 'blake3' in sys.modules:
+        hashes.add('blake3')
     hashes.add('null')
     return sorted(hashes)
 
@@ -180,6 +204,8 @@ def file_hash_factory(algo):
         return Adler32FileHash()
     if algo == 'crc32':
         return Crc32FileHash()
+    if algo == 'blake3':
+        return Blake3FileHash()
     if algo == 'null':
         return NullFileHash()
     return HashLibFileHash(algo)

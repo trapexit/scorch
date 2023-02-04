@@ -114,6 +114,19 @@ The `--db` argument can take more than a path.
 
 If there is no extension then `.db` will be added.
 
+#### Hash algorithms
+
+Hash functions available by default:
+* Adler-32
+* CRC-32
+* Python [hashlib](https://docs.python.org/3/library/hashlib.html) algorithms
+
+To use the [BLAKE3](https://github.com/BLAKE3-team/BLAKE3)
+hash function install the [blake3](https://pypi.org/project/blake3/) package:
+
+```
+pip install blake3
+```
 
 #### Backup / Restore
 
